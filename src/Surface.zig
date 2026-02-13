@@ -165,6 +165,9 @@ command_timer: ?std.time.Instant = null,
 /// Search state
 search: ?Search = null,
 
+/// Completion state for intelligent command completion
+completion: ?Completion = null,
+
 /// Used to rate limit BEL handling.
 last_bell_time: ?std.time.Instant = null,
 
@@ -204,6 +207,59 @@ const Search = struct {
 
         // Now it is safe to deinit the state
         self.state.deinit();
+    }
+};
+
+/// The completion state for the surface.
+const Completion = struct {
+    history_manager: *HistoryManager,
+    completion_system: *Completion,
+
+    pub fn deinit(self: *Completion) void {
+        if (self.completion_system) |cs| {
+            cs.deinit();
+            alloc.destroy(cs);
+        }
+        if (self.history_manager) |hm| {
+            hm.deinit();
+            alloc.destroy(hm);
+        }
+    }
+
+    /// Initialize the completion system
+    pub fn init(
+        self: *Completion,
+        alloc: Allocator,
+        config: *const configpkg.Config,
+    ) !void {
+        // Create history manager configuration
+        const hm_config = HistoryManager.Config{
+            .max_history_size = config.@"completion-history-max-size",
+            .min_frequency_threshold = 2,
+            .enable_global = true,
+            .enable_per_directory = config.@"completion-history-per-directory",
+        };
+
+        self.history_manager = try alloc.create(HistoryManager, .{
+            .allocator = alloc,
+            .config = hm_config,
+        });
+
+        // Create completion system configuration
+        const cs_config = Completion.Config{
+            .max_candidates = config.@"completion-max-candidates",
+            .min_chars = config.@"completion-min-chars",
+            .mode = switch (config.@"completion-mode") {
+                .inline => .inline,
+                .menu => .menu,
+                .disabled => .disabled,
+            },
+        };
+
+        self.completion_system = try alloc.create(Completion, .{
+            .allocator = alloc,
+            .config = cs_config,
+        });
     }
 };
 

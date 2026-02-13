@@ -1831,6 +1831,46 @@ keybind: Keybinds = .{},
 /// This configuration can be repeated to specify multiple remaps.
 @"key-remap": KeyRemapSet = .empty,
 
+/// Enable intelligent command completion based on command history.
+///
+/// When enabled, Ghostty will provide context-aware command suggestions
+/// based on your usage patterns in the current working directory.
+///
+/// Available since: 1.4.0
+@"completion-enabled": bool = false,
+
+/// Completion mode that controls the UI behavior.
+///
+/// - "inline": Show only inline gray preview after cursor
+/// - "menu": Show inline preview + candidate menu on arrow keys
+/// - "disabled": Disable completion even if enabled
+///
+/// Available since: 1.4.0
+@"completion-mode": CompletionMode = .menu,
+
+/// Maximum number of completion candidates to show.
+///
+/// Available since: 1.4.0
+@"completion-max-candidates": u32 = 10,
+
+/// Minimum characters to type before triggering completion.
+///
+/// Available since: 1.4.0
+@"completion-min-chars": u32 = 1,
+
+/// Maximum number of command history entries per directory.
+///
+/// Available since: 1.4.0
+@"completion-history-max-size": u32 = 1000,
+
+/// Track command history per working directory.
+///
+/// When enabled, commands are grouped by directory for more relevant
+/// suggestions. When disabled, all commands are tracked globally.
+///
+/// Available since: 1.4.0
+@"completion-history-per-directory": bool = true,
+
 /// Horizontal window padding. This applies padding between the terminal cells
 /// and the left and right window borders. The value is in points, meaning that
 /// it will be scaled appropriately for screen DPI.
@@ -5067,6 +5107,20 @@ pub const CustomShaderAnimation = enum(c_int) {
     false,
     true,
     always,
+};
+
+/// Valid values for completion-mode
+/// c_int because it needs to be extern compatible
+/// If this is changed, you must also update ghostty.h
+pub const CompletionMode = enum(c_int) {
+    /// Only inline gray preview
+    inline,
+
+    /// Inline preview + candidate menu on arrow keys
+    menu,
+
+    /// Completion disabled
+    disabled,
 };
 
 /// Valid values for macos-non-native-fullscreen

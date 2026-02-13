@@ -105,6 +105,9 @@ extension Ghostty {
         // Cancellable for search state needle changes
         private var searchNeedleCancellable: AnyCancellable?
 
+        // The current completion state. When non-nil, completion is active.
+        @Published var completionState: CompletionState? = nil
+
         // The time this surface last became focused. This is a ContinuousClock.Instant
         // on supported platforms.
         @Published var focusInstant: ContinuousClock.Instant? = nil

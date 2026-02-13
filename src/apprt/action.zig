@@ -330,6 +330,12 @@ pub const Action = union(Key) {
     /// The readonly state of the surface has changed.
     readonly: Readonly,
 
+    /// Completion state update (show inline preview or menu)
+    completion: Completion,
+
+    /// Completion was accepted (user pressed tab on a selection)
+    completion_submit: CompletionSubmit,
+
     /// Sync with: ghostty_action_tag_e
     pub const Key = enum(c_int) {
         quit,
@@ -395,6 +401,12 @@ pub const Action = union(Key) {
         search_total,
         search_selected,
         readonly,
+
+        /// Completion state update (show inline preview or menu)
+        completion,
+
+        /// Completion was accepted (user pressed tab on a selection)
+        completion_submit,
     };
 
     /// Sync with: ghostty_action_u
@@ -562,6 +574,88 @@ pub const QuitTimer = enum(c_int) {
 pub const Readonly = enum(c_int) {
     off,
     on,
+};
+
+/// Completion action with inline preview and candidate data
+pub const Completion = struct {
+    /// Current input prefix (what user has typed)
+    prefix: [:0]const u8,
+
+    /// Completion preview text (to show in gray after cursor)
+    preview: [:0]const u8,
+
+    /// Number of candidates available
+    candidate_count: usize,
+
+    /// Currently selected candidate index (0-based)
+    selected_index: usize,
+
+    /// The working directory for context-aware completion
+    pwd: [:0]const u8 = "",
+
+    // Sync with: ghostty_action_completion_s
+    pub const C = extern struct {
+        /// Input prefix (what user has typed)
+        prefix: [*]const u8,
+
+        /// Length of prefix
+        prefix_len: usize,
+
+        /// Completion preview text (the part to show in gray)
+        preview: [*]const u8,
+
+        /// Length of preview text
+        preview_len: usize,
+
+        /// Number of candidates available
+        candidate_count: usize,
+
+        /// Currently selected candidate index (0-based, or usize max if none)
+        selected_index: usize,
+
+        /// The working directory for context-aware completion
+        pwd: [*]const u8,
+
+        /// Length of pwd
+        pwd_len: usize,
+    };
+
+    /// Convert to C ABI compatible value
+    pub fn cval(self: Completion) C {
+        return .{
+            .prefix = self.prefix.ptr,
+            .prefix_len = self.prefix.len,
+            .preview = self.preview.ptr,
+            .preview_len = self.preview.len,
+            .candidate_count = self.candidate_count,
+            .selected_index = self.selected_index orelse ~@as(usize, 0),
+            .pwd = self.pwd.ptr,
+            .pwd_len = self.pwd.len,
+        };
+    }
+};
+
+/// Completion submit action (user accepted a completion)
+pub const CompletionSubmit = struct {
+    /// The complete command that was accepted
+    command: [:0]const u8,
+
+    // Sync with: ghostty_action_completion_submit_s
+    pub const C = extern struct {
+        /// The complete command
+        command: [*]const u8,
+
+        /// Length of command
+        command_len: usize,
+    };
+
+    /// Convert to C ABI compatible value
+    pub fn cval(self: CompletionSubmit) C {
+        return .{
+            .command = self.command.ptr,
+            .command_len = self.command.len,
+        };
+    }
 };
 
 pub const MouseVisibility = enum(c_int) {

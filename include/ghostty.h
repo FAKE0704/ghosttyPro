@@ -615,6 +615,24 @@ typedef enum {
   GHOSTTY_READONLY_ON,
 } ghostty_action_readonly_e;
 
+// apprt.action.Completion
+typedef struct {
+  const char *prefix;
+  size_t prefix_len;
+  const char *preview;
+  size_t preview_len;
+  size_t candidate_count;
+  size_t selected_index;
+  const char *pwd;
+  size_t pwd_len;
+} ghostty_action_completion_s;
+
+// apprt.action.CompletionSubmit
+typedef struct {
+  const char *command;
+  size_t command_len;
+} ghostty_action_completion_submit_s;
+
 // apprt.action.DesktopNotification.C
 typedef struct {
   const char* title;
@@ -904,6 +922,8 @@ typedef enum {
   GHOSTTY_ACTION_SEARCH_TOTAL,
   GHOSTTY_ACTION_SEARCH_SELECTED,
   GHOSTTY_ACTION_READONLY,
+  GHOSTTY_ACTION_COMPLETION,
+  GHOSTTY_ACTION_COMPLETION_SUBMIT,
 } ghostty_action_tag_e;
 
 typedef union {
@@ -944,6 +964,8 @@ typedef union {
   ghostty_action_search_total_s search_total;
   ghostty_action_search_selected_s search_selected;
   ghostty_action_readonly_e readonly;
+  ghostty_action_completion_s completion;
+  ghostty_action_completion_submit_s completion_submit;
 } ghostty_action_u;
 
 typedef struct {
@@ -1029,6 +1051,8 @@ void ghostty_config_load_default_files(ghostty_config_t);
 void ghostty_config_load_recursive_files(ghostty_config_t);
 void ghostty_config_finalize(ghostty_config_t);
 bool ghostty_config_get(ghostty_config_t, void*, const char*, uintptr_t);
+bool ghostty_config_set(ghostty_config_t, const char*, const char*);
+bool ghostty_config_save(ghostty_config_t, const char*);
 ghostty_input_trigger_s ghostty_config_trigger(ghostty_config_t,
                                                const char*,
                                                uintptr_t);

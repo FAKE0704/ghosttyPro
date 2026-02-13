@@ -204,6 +204,46 @@ extension Ghostty {
                     BellBorderOverlay(bell: surfaceView.bell)
                 }
 
+                // Completion preview (inline gray suggestion)
+                if let completion = surfaceView.completionState,
+                   !completion.previewText.isEmpty {
+                    GeometryReader { geo in
+                        VStack {
+                            Spacer()
+                                .frame(height: geo.size.height * 0.75)
+
+                            CompletionPreviewView(
+                                completionState: completion,
+                                cellSize: surfaceView.cellSize
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.leading, surfaceView.cellSize.width * 0.2)
+                        }
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .allowsHitTesting(false)
+                    }
+                }
+
+                // Completion menu (candidate list)
+                if let completion = surfaceView.completionState,
+                   completion.isMenuVisible {
+                    GeometryReader { geo in
+                        VStack {
+                            Spacer()
+                                .frame(height: geo.size.height * 0.6)
+
+                            CompletionMenuView(
+                                completionState: completion,
+                                cellSize: surfaceView.cellSize
+                            )
+                            .frame(maxWidth: 500, alignment: .leading)
+                            .padding(.leading, surfaceView.cellSize.width * 0.2)
+                        }
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .allowsHitTesting(false)
+                    }
+                }
+
                 // Show a highlight effect when this surface needs attention
                 HighlightOverlay(highlighted: surfaceView.highlighted)
 
@@ -1257,6 +1297,65 @@ extension Ghostty.SurfaceView {
 
         init(from startSearch: Ghostty.Action.StartSearch) {
             self.needle = startSearch.needle ?? ""
+        }
+    }
+}
+
+// MARK: Completion State
+
+extension Ghostty.SurfaceView {
+    /// Completion state for intelligent command completion
+    class CompletionState: ObservableObject {
+        /// Current input prefix (what user has typed)
+        @Published var inputPrefix: String = ""
+
+        /// Completion preview text (the part to show in gray)
+        @Published var previewText: String = ""
+
+        /// Available completion candidates
+        @Published var candidates: [CompletionCandidate] = []
+
+        /// Currently selected candidate index
+        @Published var selectedIndex: Int = -1
+
+        /// Whether the candidate menu is visible
+        @Published var isMenuVisible: Bool = false
+
+        init() {}
+
+        /// Update state from completion action
+        func update(from action: Ghostty.Action.Completion) {
+            if let prefix = action.prefix {
+                self.inputPrefix = String(cString: prefix)
+            }
+
+            if let preview = action.preview {
+                self.previewText = String(cString: preview)
+            }
+
+            // Note: candidates are managed separately through action callbacks
+            // This state update is triggered by the completion action from Zig layer
+        }
+
+        /// Reset to idle state
+        func reset() {
+            self.inputPrefix = ""
+            self.previewText = ""
+            self.candidates = []
+            self.selectedIndex = -1
+            self.isMenuVisible = false
+        }
+    }
+
+    /// A single completion candidate
+    struct CompletionCandidate: Identifiable {
+        let id = UUID()
+        let command: String
+        let frequency: Int
+
+        init(command: String, frequency: Int) {
+            self.command = command
+            self.frequency = frequency
         }
     }
 }

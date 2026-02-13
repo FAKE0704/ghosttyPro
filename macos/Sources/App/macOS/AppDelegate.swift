@@ -1126,6 +1126,10 @@ class AppDelegate: NSObject,
         Ghostty.App.openConfig()
     }
 
+    @IBAction func showSettings(_ sender: Any?) {
+        SettingsController.shared.showWindow(sender)
+    }
+
     @IBAction func reloadConfig(_ sender: Any?) {
         ghostty.reloadConfig()
     }
