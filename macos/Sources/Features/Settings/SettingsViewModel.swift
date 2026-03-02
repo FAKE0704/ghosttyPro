@@ -217,11 +217,14 @@ class SettingsViewModel: ObservableObject {
 
     /// Save all changes to the configuration file
     func save() -> Bool {
-        // Apply changes to config
-        updateConfigFromViewModel()
+        // Build settings dictionary
+        var settings: [String: String] = [:]
+        settings["completion-enabled"] = completionEnabled ? "true" : "false"
+        settings["completion-min-chars"] = String(completionMinChars)
+        settings["completion-mode"] = completionModeIndex == 0 ? "inline" : "menu"
 
         // Save to file
-        let success = config.save()
+        let success = config.save(settings: settings)
         if !success {
             errorMessage = "保存配置失败，请检查文件权限"
             return false

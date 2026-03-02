@@ -207,7 +207,7 @@ pub const Completion = struct {
 
                 // Clear current input and replace with full command
                 self.input_buffer.clearRetainingCapacity();
-                try self.input_buffer.appendSlice(command);
+                try self.input_buffer.appendSlice(self.allocator, command);
 
                 // Record to history
                 try history.recordCommand(current_path, command);

@@ -3353,17 +3353,19 @@ fn sendCompletionUpdate(self: *Surface, comp: *CompletionState) !void {
     const prefix_z = try self.alloc.dupeZ(u8, input_prefix);
     defer self.alloc.free(prefix_z);
 
+    // For preview and pwd, we need to always allocate since we need
+    // mutable slices for the C API
     const preview_z = if (current_completion) |cc|
         try self.alloc.dupeZ(u8, cc)
     else
-        "";
-    defer if (current_completion != null) self.alloc.free(preview_z);
+        try self.alloc.dupeZ(u8, "");
+    defer self.alloc.free(preview_z);
 
     const pwd_z = if (current_path) |p|
         try self.alloc.dupeZ(u8, p)
     else
-        "";
-    defer if (current_path != null) self.alloc.free(pwd_z);
+        try self.alloc.dupeZ(u8, "");
+    defer self.alloc.free(pwd_z);
 
     // Create completion action with proper slices
     // The strings need to be pointer-sized for the C struct

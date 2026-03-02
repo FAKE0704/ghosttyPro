@@ -1,8 +1,10 @@
 import SwiftUI
 import GhosttyKit
+import OSLog
+import Foundation
 
 extension Ghostty {
-    /// Maps to a `ghostty_config_t` and the various operations on that.
+    /// Maps to a `ghostty_t and the various operations on that.
     class Config: ObservableObject {
         // The underlying C pointer to the Ghostty config structure. This
         // should never be accessed directly. Any operations on this should
@@ -848,23 +850,17 @@ extension Ghostty.Config {
     /// Get a boolean configuration value
     func getBool(_ key: String, _ value: inout Bool) {
         guard let cfg = self.config else { return }
-        var v: UnsafePointer<Int8>? = nil
-        let _ = ghostty_config_get(cfg, &v, key, UInt(key.lengthOfBytes(using: .utf8)))
-        if let ptr = v {
-            let str = String(cString: ptr)
-            value = str == "true"
-        }
+        var v = false
+        _ = ghostty_config_get(cfg, &v, key, UInt(key.lengthOfBytes(using: .utf8)))
+        value = v
     }
 
     /// Get an integer configuration value
     func getInt(_ key: String, _ value: inout Int) {
         guard let cfg = self.config else { return }
-        var v: UnsafePointer<Int8>? = nil
-        let _ = ghostty_config_get(cfg, &v, key, UInt(key.lengthOfBytes(using: .utf8)))
-        if let ptr = v {
-            let str = String(cString: ptr)
-            value = Int(str) ?? 0
-        }
+        var v: CUnsignedInt = 0
+        _ = ghostty_config_get(cfg, &v, key, UInt(key.lengthOfBytes(using: .utf8)))
+        value = Int(v)
     }
 
     /// Get a string configuration value
@@ -876,18 +872,90 @@ extension Ghostty.Config {
         return String(cString: ptr)
     }
 
-    /// Save configuration to the default config file
-    func save() -> Bool {
-        guard let cfg = self.config else { return false }
-        // Use the default config file path
-        return ghostty_config_save(cfg, nil)
-    }
+    /// Save configuration values to the default config file
+    /// - Parameters:
+    ///   - settings: Dictionary of key-value pairs to save
+    /// - Returns: true if successful, false otherwise
+    func save(settings: [String: String]) -> Bool {
+        let logger = Logger(subsystem: "com.mitchellh.ghostty", category: "Config")
 
-    /// Save configuration to a specific file
-    func save(to path: String) -> Bool {
-        guard let cfg = self.config else { return false }
-        return path.withCString { ptr in
-            ghostty_config_save(cfg, ptr)
+        // Get the config file path
+        let path = ghostty_config_open_path()
+        defer {
+            ghostty_string_free(path)
+        }
+        guard let pathPtr = path.ptr else { return false }
+        let configPath = String(cString: pathPtr)
+
+        // Read existing config if it exists
+        var existingLines: [String] = []
+        if FileManager.default.fileExists(atPath: configPath) {
+            if let data = FileManager.default.contents(atPath: configPath) {
+                existingLines = String(data: data, encoding: .utf8)?.components(separatedBy: .newlines) ?? []
+            }
+        }
+
+        // Create a map of current settings from existing config
+        var existingSettings: [String: String] = [:]
+        for line in existingLines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("#") { continue }
+            if let separatorIndex = trimmed.firstIndex(of: "=") {
+                let key = String(trimmed[..<separatorIndex]).trimmingCharacters(in: .whitespaces)
+                let value = String(trimmed[trimmed.index(after: separatorIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                existingSettings[key] = value
+            }
+        }
+
+        // Merge with new settings
+        for (key, value) in settings {
+            existingSettings[key] = value
+        }
+
+        // Build new content
+        var newContent: [String] = []
+        var writtenKeys = Set<String>()
+
+        for line in existingLines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("#") {
+                newContent.append(line)
+            } else if let separatorIndex = trimmed.firstIndex(of: "=") {
+                let key = String(trimmed[..<separatorIndex]).trimmingCharacters(in: .whitespaces)
+                if existingSettings[key] != nil {
+                    // Update existing setting
+                    newContent.append("\(key) = \(existingSettings[key]!)")
+                    writtenKeys.insert(key)
+                } else {
+                    // Keep existing setting
+                    newContent.append(line)
+                }
+            } else {
+                newContent.append(line)
+            }
+        }
+
+        // Add new settings that weren't in the file
+        for (key, value) in existingSettings {
+            if !writtenKeys.contains(key) {
+                newContent.append("\(key) = \(value)")
+            }
+        }
+
+        // Ensure directory exists
+        let dir = (configPath as NSString).deletingLastPathComponent
+        if !FileManager.default.fileExists(atPath: dir) {
+            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        }
+
+        // Write to file
+        do {
+            try newContent.joined(separator: "\n").write(toFile: configPath, atomically: true, encoding: .utf8)
+            logger.info("Configuration saved to: \(configPath)")
+            return true
+        } catch {
+            logger.error("Failed to save config: \(error)")
+            return false
         }
     }
 }
