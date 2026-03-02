@@ -24,3 +24,6 @@ glad.zip
 /ghostty.qcow2
 
 vgcore.*
+
+# macOS build artifacts
+macos/macos/
