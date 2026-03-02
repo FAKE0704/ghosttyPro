@@ -37,7 +37,7 @@ pub const Completion = struct {
 
         pub const Mode = enum {
             /// Inline preview only
-            inline,
+            @"inline",
 
             /// Inline preview + selection menu
             menu,
@@ -88,18 +88,18 @@ pub const Completion = struct {
         return .{
             .allocator = allocator,
             .config = config,
-            .input_buffer = std.ArrayList(u8).init(allocator),
+            .input_buffer = std.ArrayList(u8).empty,
             .state = .idle,
-            .candidates = std.ArrayList(Candidate).init(allocator),
+            .candidates = std.ArrayList(Candidate).empty,
             .selected_index = null,
         };
     }
 
     /// Deinitialize and free resources
     pub fn deinit(self: *Completion) void {
-        self.input_buffer.deinit();
+        self.input_buffer.deinit(self.allocator);
         self.clearCandidates();
-        self.candidates.deinit();
+        self.candidates.deinit(self.allocator);
     }
 
     /// Handle a character input
@@ -110,7 +110,7 @@ pub const Completion = struct {
         current_path: ?[]const u8,
     ) !Event {
         // Add character to input buffer
-        try self.input_buffer.append(ch);
+        try self.input_buffer.append(self.allocator, ch);
 
         // Update completions
         try self.updateCompletions(history, current_path);
@@ -171,6 +171,11 @@ pub const Completion = struct {
     /// Get current selected index
     pub fn getSelectedIndex(self: *const Completion) ?usize {
         return self.selected_index;
+    }
+
+    /// Get current input prefix
+    pub fn inputPrefix(self: *const Completion) []const u8 {
+        return self.input_buffer.items;
     }
 
     /// Check if menu is currently visible
@@ -265,7 +270,7 @@ pub const Completion = struct {
         history: *const HistoryManager,
         current_path: ?[]const u8,
     ) !?Event {
-        if (self.input_buffer.popOrNull()) == null) {
+        if (self.input_buffer.popOrNull() == null) {
             // Buffer is empty, send backspace to PTY
             return .{ .input_bytes = &[_]u8{127} }; // DEL
         }
@@ -312,7 +317,7 @@ pub const Completion = struct {
 
         // Transfer ownership
         for (completions) |c| {
-            try self.candidates.append(.{
+            try self.candidates.append(self.allocator, .{
                 .command = c.command,
                 .frequency = c.frequency,
                 .score = c.score,
@@ -322,7 +327,7 @@ pub const Completion = struct {
         // Update state based on mode and candidates
         if (self.candidates.items.len > 0) {
             self.state = switch (self.config.mode) {
-                .inline => .inline_preview,
+                .@"inline" => .inline_preview,
                 .menu => .inline_preview, // Start with inline, menu on arrow key
                 .disabled => .idle,
             };
@@ -350,7 +355,7 @@ pub const Completion = struct {
             new_idx = 0;
         }
 
-        self.selected_index = @intCast(usize, new_idx);
+        self.selected_index = @intCast(new_idx);
     }
 
     fn clearCandidates(self: *Completion) void {

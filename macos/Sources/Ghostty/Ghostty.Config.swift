@@ -810,4 +810,84 @@ extension Ghostty.Config {
             }
         }
     }
+
+    // MARK: - Configuration Setters
+
+    /// Set a boolean configuration value
+    func setBool(_ key: String, _ value: Bool) {
+        guard let cfg = self.config else { return }
+        let valueStr = value ? "true" : "false"
+        valueStr.withCString { ptr in
+            key.withCString { keyPtr in
+                ghostty_config_set(cfg, keyPtr, ptr)
+            }
+        }
+    }
+
+    /// Set an integer configuration value
+    func setInt(_ key: String, _ value: Int32) {
+        guard let cfg = self.config else { return }
+        let valueStr = String(value)
+        valueStr.withCString { ptr in
+            key.withCString { keyPtr in
+                ghostty_config_set(cfg, keyPtr, ptr)
+            }
+        }
+    }
+
+    /// Set a string configuration value
+    func setString(_ key: String, _ value: String) {
+        guard let cfg = self.config else { return }
+        value.withCString { valuePtr in
+            key.withCString { keyPtr in
+                ghostty_config_set(cfg, keyPtr, valuePtr)
+            }
+        }
+    }
+
+    /// Get a boolean configuration value
+    func getBool(_ key: String, _ value: inout Bool) {
+        guard let cfg = self.config else { return }
+        var v: UnsafePointer<Int8>? = nil
+        let _ = ghostty_config_get(cfg, &v, key, UInt(key.lengthOfBytes(using: .utf8)))
+        if let ptr = v {
+            let str = String(cString: ptr)
+            value = str == "true"
+        }
+    }
+
+    /// Get an integer configuration value
+    func getInt(_ key: String, _ value: inout Int) {
+        guard let cfg = self.config else { return }
+        var v: UnsafePointer<Int8>? = nil
+        let _ = ghostty_config_get(cfg, &v, key, UInt(key.lengthOfBytes(using: .utf8)))
+        if let ptr = v {
+            let str = String(cString: ptr)
+            value = Int(str) ?? 0
+        }
+    }
+
+    /// Get a string configuration value
+    func getString(_ key: String) -> String? {
+        guard let cfg = self.config else { return nil }
+        var v: UnsafePointer<Int8>? = nil
+        guard ghostty_config_get(cfg, &v, key, UInt(key.lengthOfBytes(using: .utf8))) else { return nil }
+        guard let ptr = v else { return nil }
+        return String(cString: ptr)
+    }
+
+    /// Save configuration to the default config file
+    func save() -> Bool {
+        guard let cfg = self.config else { return false }
+        // Use the default config file path
+        return ghostty_config_save(cfg, nil)
+    }
+
+    /// Save configuration to a specific file
+    func save(to path: String) -> Bool {
+        guard let cfg = self.config else { return false }
+        return path.withCString { ptr in
+            ghostty_config_save(cfg, ptr)
+        }
+    }
 }

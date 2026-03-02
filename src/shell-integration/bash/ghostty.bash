@@ -252,6 +252,11 @@ function __ghostty_preexec() {
     builtin printf "\e]2;%s\a" "${cmd//[[:cntrl:]]/}"
   fi
 
+  # Send command to completion history (OSC 711)
+  if [[ -n $cmd ]]; then
+    builtin printf "\e]711;%s\a" "$cmd"
+  fi
+
   # End of input, start of output.
   builtin printf "\e]133;C;\a"
   _ghostty_executing=1

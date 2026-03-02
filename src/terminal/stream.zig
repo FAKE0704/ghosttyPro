@@ -126,6 +126,7 @@ pub const Action = union(Key) {
     kitty_color_report: kitty.color.OSC,
     color_operation: ColorOperation,
     semantic_prompt: SemanticPrompt,
+    command_history: CommandHistory,
 
     pub const Key = lib.Enum(
         lib_target,
@@ -223,6 +224,7 @@ pub const Action = union(Key) {
             "kitty_color_report",
             "color_operation",
             "semantic_prompt",
+            "command_history",
         },
     );
 
@@ -401,6 +403,16 @@ pub const Action = union(Key) {
     };
 
     pub const SemanticPrompt = osc.Command.SemanticPrompt;
+
+    pub const CommandHistory = struct {
+        command: []const u8,
+
+        pub const C = lib.String;
+
+        pub fn cval(self: CommandHistory) CommandHistory.C {
+            return .init(self.command);
+        }
+    };
 };
 
 /// Returns a type that can process a stream of tty control characters.
@@ -1988,6 +2000,10 @@ pub fn Stream(comptime Handler: type) type {
                 .report_pwd => |v| {
                     @branchHint(.likely);
                     try self.handler.vt(.report_pwd, .{ .url = v.value });
+                },
+
+                .command_history => |v| {
+                    try self.handler.vt(.command_history, .{ .command = v.command });
                 },
 
                 .mouse_shape => |v| {

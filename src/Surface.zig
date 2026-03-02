@@ -166,7 +166,7 @@ command_timer: ?std.time.Instant = null,
 search: ?Search = null,
 
 /// Completion state for intelligent command completion
-completion: ?Completion = null,
+completion: ?*CompletionState = null,
 
 /// Used to rate limit BEL handling.
 last_bell_time: ?std.time.Instant = null,
@@ -211,55 +211,52 @@ const Search = struct {
 };
 
 /// The completion state for the surface.
-const Completion = struct {
-    history_manager: *HistoryManager,
-    completion_system: *Completion,
+const CompletionState = struct {
+    history_manager: *terminal.HistoryManager,
+    completion_system: *terminal.Completion,
+    allocator: Allocator,
 
-    pub fn deinit(self: *Completion) void {
-        if (self.completion_system) |cs| {
-            cs.deinit();
-            alloc.destroy(cs);
-        }
-        if (self.history_manager) |hm| {
-            hm.deinit();
-            alloc.destroy(hm);
-        }
+    pub fn deinit(self: *CompletionState) void {
+        self.completion_system.deinit();
+        self.allocator.destroy(self.completion_system);
+        self.history_manager.deinit();
+        self.allocator.destroy(self.history_manager);
     }
 
     /// Initialize the completion system
     pub fn init(
-        self: *Completion,
+        self: *CompletionState,
         alloc: Allocator,
         config: *const configpkg.Config,
     ) !void {
+        self.allocator = alloc;
+
         // Create history manager configuration
-        const hm_config = HistoryManager.Config{
+        const hm_config = terminal.HistoryManager.Config{
             .max_history_size = config.@"completion-history-max-size",
             .min_frequency_threshold = 2,
             .enable_global = true,
             .enable_per_directory = config.@"completion-history-per-directory",
         };
 
-        self.history_manager = try alloc.create(HistoryManager, .{
-            .allocator = alloc,
-            .config = hm_config,
-        });
+        self.history_manager = try alloc.create(terminal.HistoryManager);
+        self.history_manager.* = try terminal.HistoryManager.init(alloc, hm_config);
 
         // Create completion system configuration
-        const cs_config = Completion.Config{
-            .max_candidates = config.@"completion-max-candidates",
-            .min_chars = config.@"completion-min-chars",
+        const max_candidates: usize = @intCast(config.@"completion-max-candidates");
+        const min_chars: usize = @intCast(config.@"completion-min-chars");
+        const cs_config = terminal.Completion.Config{
+            .max_candidates = max_candidates,
+            .min_chars = min_chars,
             .mode = switch (config.@"completion-mode") {
-                .inline => .inline,
+                .@"inline" => .@"inline",
                 .menu => .menu,
                 .disabled => .disabled,
             },
         };
 
-        self.completion_system = try alloc.create(Completion, .{
-            .allocator = alloc,
-            .config = cs_config,
-        });
+        self.completion_system = try alloc.create(terminal.Completion);
+        self.completion_system.* = terminal.Completion.init(alloc, cs_config);
     }
 };
 
@@ -770,6 +767,13 @@ pub fn init(
     );
     self.io_thr.setName("io") catch {};
 
+    // Initialize completion system if configured
+    if (config.@"completion-enabled") {
+        const comp = try alloc.create(CompletionState);
+        try comp.init(alloc, config);
+        self.completion = comp;
+    }
+
     // Determine our initial window size if configured. We need to do this
     // quite late in the process because our height/width are in grid dimensions,
     // so we need to know our cell sizes first.
@@ -833,6 +837,13 @@ pub fn init(
 pub fn deinit(self: *Surface) void {
     // Stop search thread
     if (self.search) |*s| s.deinit();
+
+    // Cleanup completion system
+    if (self.completion) |c| {
+        c.deinit();
+        self.alloc.destroy(c);
+        self.completion = null;
+    }
 
     // Stop rendering thread
     {
@@ -1112,6 +1123,24 @@ pub fn handleMessage(self: *Surface, msg: Message) !void {
                 .pwd,
                 .{ .pwd = str },
             );
+        },
+
+        .command_history => |w| {
+            defer w.deinit();
+
+            // Get the command string
+            const cmd = w.slice();
+
+            // Record to completion history if available
+            if (self.completion) |comp| {
+                // Get the current working directory from the terminal
+                const current_dir = self.io.terminal.getPwd();
+                comp.history_manager.recordCommand(current_dir, cmd) catch |err| {
+                    log.warn("failed to record command to history: {}", .{err});
+                };
+            }
+
+            log.debug("recorded command to history: {s}", .{cmd});
         },
 
         .close => self.close(),
@@ -2824,6 +2853,11 @@ pub fn keyCallback(
             .stable => |v| .{ .write_stable = v },
             .alloc => |v| .{ .write_alloc = v },
         }, .unlocked);
+
+        // Handle completion system for character input
+        if (self.completion != null and event.action == .press and event.utf8.len > 0) {
+            try self.handleCompletionInput(event.utf8);
+        }
     } else {
         // No valid request means that we didn't encode anything.
         return .ignored;
@@ -3281,6 +3315,72 @@ fn encodeKeyOpts(self: *const Surface) input.key_encode.Options {
     };
 
     return opts;
+}
+
+/// Handle completion system for character input
+fn handleCompletionInput(self: *Surface, bytes: []const u8) !void {
+    const comp = self.completion orelse return;
+    const current_path = self.io.terminal.getPwd();
+
+    // Process each character through the completion system
+    for (bytes) |ch| {
+        _ = comp.completion_system.handleChar(
+            ch,
+            comp.history_manager,
+            current_path,
+        ) catch |err| {
+            log.warn("completion handleChar error: {}", .{err});
+            return;
+        };
+
+        // Send completion update to macOS layer
+        try self.sendCompletionUpdate(comp);
+    }
+}
+
+/// Send completion state update to macOS layer
+fn sendCompletionUpdate(self: *Surface, comp: *CompletionState) !void {
+    // Get current completion data
+    const current_completion = comp.completion_system.getCurrentCompletion();
+    const candidates = comp.completion_system.getCandidates();
+    const selected_idx = comp.completion_system.getSelectedIndex() orelse 0;
+    const current_path = self.io.terminal.getPwd();
+
+    // Get input prefix
+    const input_prefix = comp.completion_system.inputPrefix();
+
+    // Create zero-terminated strings for C API
+    const prefix_z = try self.alloc.dupeZ(u8, input_prefix);
+    defer self.alloc.free(prefix_z);
+
+    const preview_z = if (current_completion) |cc|
+        try self.alloc.dupeZ(u8, cc)
+    else
+        "";
+    defer if (current_completion != null) self.alloc.free(preview_z);
+
+    const pwd_z = if (current_path) |p|
+        try self.alloc.dupeZ(u8, p)
+    else
+        "";
+    defer if (current_path != null) self.alloc.free(pwd_z);
+
+    // Create completion action with proper slices
+    // The strings need to be pointer-sized for the C struct
+    const completion_action = apprt.action.Completion{
+        .prefix = prefix_z[0..prefix_z.len :0],
+        .preview = preview_z[0..preview_z.len :0],
+        .candidate_count = candidates.len,
+        .selected_index = if (selected_idx < candidates.len) selected_idx else std.math.maxInt(usize),
+        .pwd = pwd_z[0..pwd_z.len :0],
+    };
+
+    // Send completion action using performAction
+    _ = try self.rt_app.performAction(
+        .{ .surface = self },
+        .completion,
+        completion_action,
+    );
 }
 
 /// Sends text as-is to the terminal without triggering any keyboard

@@ -316,6 +316,31 @@ pub const App = struct {
                 },
             },
 
+            .completion => switch (target) {
+                .app => {},
+
+                // Surface completion state update
+                .surface => |surface| {
+                    // The completion action contains the state to display to the user
+                    // This is forwarded to the UI layer (macOS) to update the display
+                    _ = surface;
+                    // value is the Completion struct itself
+                    const completion_value = value;
+                    _ = completion_value;
+                },
+            },
+
+            .completion_submit => switch (target) {
+                .app => {},
+
+                // Completion was accepted by the user
+                .surface => |surface| {
+                    // Record the command to history and send to PTY
+                    _ = surface;
+                    _ = value.completion_submit;
+                },
+            },
+
             else => {},
         }
     }

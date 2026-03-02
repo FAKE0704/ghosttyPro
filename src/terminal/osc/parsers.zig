@@ -4,6 +4,7 @@ pub const change_window_icon = @import("parsers/change_window_icon.zig");
 pub const change_window_title = @import("parsers/change_window_title.zig");
 pub const clipboard_operation = @import("parsers/clipboard_operation.zig");
 pub const color = @import("parsers/color.zig");
+pub const command_history = @import("parsers/command_history.zig");
 pub const hyperlink = @import("parsers/hyperlink.zig");
 pub const iterm2 = @import("parsers/iterm2.zig");
 pub const kitty_color = @import("parsers/kitty_color.zig");

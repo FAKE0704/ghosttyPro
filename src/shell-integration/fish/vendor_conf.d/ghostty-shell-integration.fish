@@ -212,6 +212,13 @@ function __ghostty_setup --on-event fish_prompt -d "Setup ghostty integration"
 
     function __ghostty_mark_output_start --on-event fish_preexec
         set --global __ghostty_prompt_state pre-exec
+
+        # Send command to completion history (OSC 711)
+        # $argv[1] contains the command that's about to be executed
+        if test -n "$argv[1]"
+            echo -en "\e]711;$argv[1]\a"
+        end
+
         echo -en "\e]133;C\a"
     end
 

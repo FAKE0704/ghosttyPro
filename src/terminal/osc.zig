@@ -18,6 +18,7 @@ const encoding = @import("osc/encoding.zig");
 
 pub const color = parsers.color;
 pub const semantic_prompt = parsers.semantic_prompt;
+pub const command_history = parsers.command_history;
 
 const log = std.log.scoped(.osc);
 
@@ -153,6 +154,12 @@ pub const Command = union(Key) {
     /// Kitty text sizing protocol (OSC 66)
     kitty_text_sizing: parsers.kitty_text_sizing.OSC,
 
+    /// OSC 711 - Command history tracking for intelligent completion
+    command_history: struct {
+        /// The command that was executed
+        command: []const u8,
+    },
+
     pub const SemanticPrompt = parsers.semantic_prompt.Command;
 
     pub const Key = LibEnum(
@@ -182,6 +189,7 @@ pub const Command = union(Key) {
             "conemu_xterm_emulation",
             "conemu_comment",
             "kitty_text_sizing",
+            "command_history",
         },
     );
 
@@ -326,6 +334,8 @@ pub const Parser = struct {
         @"22",
         @"52",
         @"66",
+        @"71",
+        @"711",
         @"77",
         @"104",
         @"110",
@@ -379,6 +389,9 @@ pub const Parser = struct {
         switch (self.command) {
             .kitty_color_protocol => |*v| kitty_color_protocol: {
                 v.deinit(self.alloc orelse break :kitty_color_protocol);
+            },
+            .command_history => |v| {
+                if (self.alloc) |alloc| alloc.free(v.command);
             },
             .change_window_icon,
             .change_window_title,
@@ -586,7 +599,18 @@ pub const Parser = struct {
 
             .@"7" => switch (c) {
                 ';' => self.writeToFixed(),
+                '1' => self.state = .@"71",
                 '7' => self.state = .@"77",
+                else => self.state = .invalid,
+            },
+
+            .@"71" => switch (c) {
+                '1' => self.state = .@"711",
+                else => self.state = .invalid,
+            },
+
+            .@"711" => switch (c) {
+                ';' => self.writeToAllocating(),
                 else => self.state = .invalid,
             },
 
@@ -666,6 +690,8 @@ pub const Parser = struct {
 
             .@"7" => parsers.report_pwd.parse(self, terminator_ch),
 
+            .@"711" => parsers.command_history.parse(self, terminator_ch),
+
             .@"8" => parsers.hyperlink.parse(self, terminator_ch),
 
             .@"9" => parsers.osc9.parse(self, terminator_ch),
@@ -679,6 +705,8 @@ pub const Parser = struct {
             .@"6" => null,
 
             .@"66" => parsers.kitty_text_sizing.parse(self, terminator_ch),
+
+            .@"71" => null,
 
             .@"77" => null,
 

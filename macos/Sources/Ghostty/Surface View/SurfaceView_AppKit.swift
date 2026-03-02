@@ -1030,6 +1030,13 @@ extension Ghostty {
         }
 
         override func keyDown(with event: NSEvent) {
+            // Handle completion mode keys before sending to PTY
+            if let completion = completionState {
+                if handleCompletionKey(event, completion: completion) {
+                    return
+                }
+            }
+
             guard let surface = self.surface else {
                 self.interpretKeyEvents([event])
                 return
@@ -1679,6 +1686,62 @@ extension Ghostty {
                 self.window?.makeKeyAndOrderFront(self)
                 Ghostty.moveFocus(to: self)
             }
+        }
+
+        // MARK: - Completion Key Handling
+
+        /// Handle keyboard events when completion is active
+        func handleCompletionKey(_ event: NSEvent, completion: CompletionState) -> Bool {
+            switch event.keyCode {
+            case 48: // Tab key
+                if !completion.previewText.isEmpty {
+                    // Accept the completion
+                    acceptCompletion(completion)
+                    return true
+                }
+                return false
+
+            case 126: // Up arrow
+                if completion.candidates.count > 0 {
+                    completion.isMenuVisible = true
+                    completion.moveSelection(by: -1)
+                    return true
+                }
+                return false
+
+            case 125: // Down arrow
+                if completion.candidates.count > 0 {
+                    completion.isMenuVisible = true
+                    completion.moveSelection(by: 1)
+                    return true
+                }
+                return false
+
+            case 53: // Escape key
+                completionState = nil
+                return true
+
+            default:
+                return false
+            }
+        }
+
+        /// Accept the current completion and send it to the terminal
+        func acceptCompletion(_ completion: CompletionState) {
+            guard let surface = self.surface else { return }
+
+            let fullCommand = completion.inputPrefix + completion.previewText
+            let action = "completion_submit:\(fullCommand)"
+
+            // Send the action to trigger command submission
+            _ = ghostty_surface_binding_action(
+                surface,
+                action,
+                UInt(action.lengthOfBytes(using: .utf8))
+            )
+
+            // Clear completion state
+            completionState = nil
         }
 
         struct DerivedConfig {

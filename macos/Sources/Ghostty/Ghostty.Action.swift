@@ -162,6 +162,61 @@ extension Ghostty.Action {
             }
         }
     }
+
+    /// Completion action with inline preview and candidate data
+    struct Completion {
+        /// Current input prefix (what user has typed)
+        let prefix: String?
+
+        /// Completion preview text (to show in gray after cursor)
+        let preview: String?
+
+        /// Number of candidates available
+        let candidateCount: Int
+
+        /// Currently selected candidate index (0-based)
+        let selectedIndex: Int
+
+        /// The working directory for context-aware completion
+        let pwd: String?
+
+        init(c: ghostty_action_completion_s) {
+            if let prefixPtr = c.prefix {
+                self.prefix = String(cString: prefixPtr)
+            } else {
+                self.prefix = nil
+            }
+
+            if let previewPtr = c.preview {
+                self.preview = String(cString: previewPtr)
+            } else {
+                self.preview = nil
+            }
+
+            self.candidateCount = Int(c.candidate_count)
+            self.selectedIndex = Int(c.selected_index)
+
+            if let pwdPtr = c.pwd {
+                self.pwd = String(cString: pwdPtr)
+            } else {
+                self.pwd = nil
+            }
+        }
+    }
+
+    /// Completion submit action (user accepted a completion)
+    struct CompletionSubmit {
+        /// The complete command that was accepted
+        let command: String
+
+        init(c: ghostty_action_completion_submit_s) {
+            if let commandPtr = c.command {
+                self.command = String(cString: commandPtr)
+            } else {
+                self.command = ""
+            }
+        }
+    }
 }
 
 // Putting the initializer in an extension preserves the automatic one.

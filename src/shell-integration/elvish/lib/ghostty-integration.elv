@@ -22,8 +22,14 @@
     printf "\e]133;A\a"
   }
 
-  fn mark-output-start {|_|
+  fn mark-output-start {|cmd|
     set-prompt-state 'pre-exec'
+
+    # Send command to completion history (OSC 711)
+    if (not-eq $cmd "") {
+      printf "\e]711;"$cmd"\a"
+    }
+
     printf "\e]133;C\a"
   }
 

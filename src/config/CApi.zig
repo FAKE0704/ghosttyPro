@@ -191,9 +191,9 @@ export fn ghostty_config_set(
         value: ?[]const u8,
         consumed: bool = false,
 
-        pub fn next(self: *LineIterator) ?[]const u8 {
-            if (self.consumed) return null;
-            self.consumed = true;
+        pub fn next(it: *@This()) ?[]const u8 {
+            if (it.consumed) return null;
+            it.consumed = true;
 
             // Format: key = value
             var buf: [512]u8 = undefined;
@@ -201,16 +201,15 @@ export fn ghostty_config_set(
             var writer = fba.writer();
 
             // Write key
-            writer.writeAll(self.key) catch return null;
+            writer.writeAll(it.key) catch return null;
 
             // Write value if present
-            if (self.value) |v| {
+            if (it.value) |v| {
                 writer.writeAll(" = ") catch return null;
                 writer.writeAll(v) catch return null;
             }
 
-            const written = writer.written();
-            return written[0..];
+            return fba.getWritten();
         }
     };
 
@@ -226,48 +225,10 @@ export fn ghostty_config_set(
 /// Save configuration to the default config file path.
 /// Returns true if successful, false otherwise.
 export fn ghostty_config_save(self: *Config, path: ?[*:0]const u8) bool {
-    const config_path = if (path) |p| std.mem.span(p) else blk: {
-        // Get default config path
-        const edit = @import("edit.zig");
-        break :blk edit.openPath(state.alloc) catch |err| {
-            log.err("error getting config path err={}", .{err});
-            return null;
-        };
-    };
-
-    if (config_path) |cp| {
-        // Ensure directory exists
-        if (std.fs.path.dirname(cp)) |dir| {
-            std.fs.cwd().makePath(dir) catch |err| {
-                log.err("error creating config directory err={}", .{err});
-                return false;
-            };
-        }
-
-        // Write config to file
-        var file = std.fs.createFileAbsolute(cp, .{}) catch |err| {
-            log.err("error creating config file path={s} err={}", .{ cp, err });
-            return false;
-        };
-        defer file.close();
-
-        var buf: [4096]u8 = undefined;
-        var file_writer = file.writer(&buf);
-        const writer = &file_writer.interface;
-
-        // Write all config fields to file
-        // Note: This is a simplified version that writes basic key=value pairs
-        // For a complete implementation, we'd need to iterate over all config fields
-        // and format them properly.
-        self.writeToFile(writer) catch |err| {
-            log.err("error writing config file err={}", .{err});
-            return false;
-        };
-
-        log.info("saved configuration to path={s}", .{cp});
-        return true;
-    };
-
+    _ = self;
+    _ = path;
+    // TODO: Implement configuration saving
+    log.warn("ghostty_config_save not yet implemented", .{});
     return false;
 }
 
@@ -302,18 +263,21 @@ pub const ConfigMeta = struct {
     }
 
     /// Get all configuration categories
-    pub fn getCategories(self: *const ConfigMeta) []const CategoryMeta {
-        return comptime categories;
+    pub fn getCategories(_self: *const ConfigMeta) []const CategoryMeta {
+        _ = _self;
+        return &categories;
     }
 
     /// Get all keys for a specific category
-    pub fn getKeysForCategory(self: *const ConfigMeta, category: []const u8) []const KeyMeta {
+    pub fn getKeysForCategory(_self: *const ConfigMeta, _category: []const u8) []const KeyMeta {
+        _ = _self;
+        _ = _category;
         // This would return all keys belonging to a category
         // For now, return empty slice
         return &.{};
     }
 
-    const comptime categories = []const CategoryMeta{
+    const categories = [_]CategoryMeta{
         .{ .name = "appearance", .display = "外观", .icon = "paintbrush" },
         .{ .name = "font", .display = "字体", .icon = "textformat" },
         .{ .name = "colors", .display = "颜色", .icon = "palette" },

@@ -5114,7 +5114,7 @@ pub const CustomShaderAnimation = enum(c_int) {
 /// If this is changed, you must also update ghostty.h
 pub const CompletionMode = enum(c_int) {
     /// Only inline gray preview
-    inline,
+    @"inline",
 
     /// Inline preview + candidate menu on arrow keys
     menu,

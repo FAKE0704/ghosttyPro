@@ -1,4 +1,5 @@
 import SwiftUI
+import GhosttyKit
 
 // MARK: - Configuration Categories
 
@@ -45,49 +46,35 @@ struct AppearanceCategoryView: View {
 
     var body: some View {
         Form {
-            Section {
-                Text("外观")
-                    .font(.headline)
+            Section("窗口透明度") {
+                VStack(alignment: .leading) {
+                    HStack {
+                        Text("窗口透明度")
+                        Spacer()
+                        Text("\(Int(viewModel.windowOpacity * 100))%")
+                            .foregroundColor(.secondary)
+                    }
 
-                Text("配置终端窗口的外观设置")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } header: {
-                Image(systemName: "paintbrush")
-            }
-
-            Section {
-                HStack {
-                    Text("窗口透明度")
-                    Spacer()
-                    Text("\(Int(viewModel.windowOpacity * 100))%")
-                        .foregroundColor(.secondary)
+                    Slider(
+                        value: $viewModel.windowOpacity,
+                        in: 0...1,
+                        step: 0.01
+                    )
                 }
-
-                Slider(
-                    value: $viewModel.windowOpacity,
-                    in: 0...1,
-                    step: 0.01
-                )
-            } header: {
-                Text("窗口透明度")
             }
 
-            Section {
+            Section("主题") {
                 Picker("主题", selection: $viewModel.themeIndex) {
                     ForEach(0..<SettingsViewModel.themeOptions.count, id: \.self) { index in
                         Text(SettingsViewModel.themeOptions[index].displayName)
                             .tag(index)
                     }
                 }
-            } header: {
-                Text("主题")
+                .pickerStyle(.menu)
             }
 
-            Section {
+            Section("背景模糊") {
                 Toggle("背景模糊", isOn: $viewModel.backgroundBlurEnabled)
-            } header: {
-                Text("背景模糊")
             }
         }
         .formStyle(.grouped)
@@ -99,60 +86,48 @@ struct FontCategoryView: View {
 
     var body: some View {
         Form {
-            Section {
-                Text("字体")
-                    .font(.headline)
-
-                Text("配置终端显示的字体设置")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } header: {
-                Image(systemName: "textformat")
-            }
-
-            Section {
+            Section("字体系列") {
                 Picker("字体系列", selection: $viewModel.fontFamilyIndex) {
                     ForEach(0..<SettingsViewModel.fontFamilyOptions.count, id: \.self) { index in
                         Text(SettingsViewModel.fontFamilyOptions[index])
                             .tag(index)
                     }
                 }
-            } header: {
-                Text("字体系列")
+                .pickerStyle(.menu)
             }
 
-            Section {
-                HStack {
-                    Text("字体大小")
-                    Spacer()
-                    Text("\(Int(viewModel.fontSize))pt")
-                        .foregroundColor(.secondary)
-                }
+            Section("字体大小") {
+                VStack(alignment: .leading) {
+                    HStack {
+                        Text("字体大小")
+                        Spacer()
+                        Text("\(Int(viewModel.fontSize))pt")
+                            .foregroundColor(.secondary)
+                    }
 
-                Slider(
-                    value: $viewModel.fontSize,
-                    in: 8...72,
-                    step: 1
-                )
-            } header: {
-                Text("字体大小")
+                    Slider(
+                        value: $viewModel.fontSize,
+                        in: 8...72,
+                        step: 1
+                    )
+                }
             }
 
-            Section {
-                HStack {
-                    Text("行间距")
-                    Spacer()
-                    Text("\(viewModel.lineSpacing, specifier: "%.1f")")
-                        .foregroundColor(.secondary)
-                }
+            Section("行间距") {
+                VStack(alignment: .leading) {
+                    HStack {
+                        Text("行间距")
+                        Spacer()
+                        Text("\(viewModel.lineSpacing, specifier: "%.1f")")
+                            .foregroundColor(.secondary)
+                    }
 
-                Slider(
-                    value: $viewModel.lineSpacing,
-                    in: 0...10,
-                    step: 0.1
-                )
-            } header: {
-                Text("行间距")
+                    Slider(
+                        value: $viewModel.lineSpacing,
+                        in: 0...10,
+                        step: 0.1
+                    )
+                }
             }
         }
         .formStyle(.grouped)
@@ -165,46 +140,8 @@ struct ColorsCategoryView: View {
     var body: some View {
         Form {
             Section {
-                Text("颜色")
-                    .font(.headline)
-
-                Text("配置终端文本和背景颜色")
-                    .font(.caption)
+                Text("颜色设置功能开发中...")
                     .foregroundColor(.secondary)
-            } header: {
-                Image(systemName: "palette")
-            }
-
-            Section {
-                HStack {
-                    Text("前景色")
-                    Spacer()
-                    ColorPicker("前景色", selection: $viewModel.foregroundColor)
-                }
-
-                HStack {
-                    Text("背景色")
-                    Spacer()
-                    ColorPicker("背景色", selection: $viewModel.backgroundColor)
-                }
-            } header: {
-                Text("基础颜色")
-            }
-
-            Section {
-                HStack {
-                    Text("光标颜色")
-                    Spacer()
-                    ColorPicker("光标颜色", selection: $viewModel.cursorColor)
-                }
-            } header: {
-                Text("光标")
-            }
-
-            Section {
-                Toggle("使用自定义调色板", isOn: $viewModel.useCustomPalette)
-            } header: {
-                Text("调色板")
             }
         }
         .formStyle(.grouped)
@@ -217,42 +154,53 @@ struct TerminalCategoryView: View {
     var body: some View {
         Form {
             Section {
-                Text("终端")
-                    .font(.headline)
-
-                Text("配置终端行为设置")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } header: {
-                Image(systemName: "terminal")
-            }
-
-            Section {
-                Picker("光标样式", selection: $viewModel.cursorStyleIndex) {
-                    Text("块").tag(0)
-                    Text("下划线").tag(1)
-                    Text("竖线").tag(2)
+                HStack {
+                    Text("光标样式")
+                    Spacer()
+                    Picker("", selection: $viewModel.cursorStyleIndex) {
+                        Text("块").tag(0)
+                        Text("下划线").tag(1)
+                        Text("竖线").tag(2)
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
                 }
-                .pickerStyle(.menu)
-            } header: {
-                Text("光标样式")
             }
 
-            Section {
+            Section("滚动历史") {
                 HStack {
                     Text("滚动距离")
                     Spacer()
-                    Text("\(viewModel.scrollbackLines) 行")
-                        .foregroundColor(.secondary)
+                    Stepper("", value: $viewModel.scrollbackLines, in: 0...100000, step: 100)
+                        .labelsHidden()
                 }
+            }
 
-                Stepper(
-                    value: $viewModel.scrollbackLines,
-                    in: 0...100000,
-                    step: 100
-                )
-            } header: {
-                Text("滚动历史")
+            Section("智能补全") {
+                Toggle("启用智能补全", isOn: $viewModel.completionEnabled)
+
+                if viewModel.completionEnabled {
+                    HStack {
+                        Text("补全模式")
+                        Spacer()
+                        Picker("", selection: $viewModel.completionModeIndex) {
+                            Text("仅灰色提示").tag(0)
+                            Text("菜单模式").tag(1)
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                    }
+
+                    HStack {
+                        Text("最少触发字符数")
+                        Spacer()
+                        Stepper("", value: $viewModel.completionMinChars, in: 1...10)
+                            .labelsHidden()
+                        Text("\(viewModel.completionMinChars)")
+                            .foregroundColor(.secondary)
+                            .frame(width: 30)
+                    }
+                }
             }
         }
         .formStyle(.grouped)
@@ -264,42 +212,35 @@ struct WindowCategoryView: View {
 
     var body: some View {
         Form {
-            Section {
-                Text("窗口")
-                    .font(.headline)
-
-                Text("配置终端窗口行为设置")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } header: {
-                Image(systemName: "macwindow")
-            }
-
-            Section {
-                Picker("初始窗口大小", selection: $viewModel.initialWindowSizeIndex) {
-                    Text("自动").tag(0)
-                    Text("固定大小").tag(1)
+            Section("初始窗口") {
+                HStack {
+                    Text("初始窗口大小")
+                    Spacer()
+                    Picker("", selection: $viewModel.initialWindowSizeIndex) {
+                        Text("自动").tag(0)
+                        Text("固定大小").tag(1)
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
                 }
-                .pickerStyle(.menu)
-            } header: {
-                Text("初始窗口")
             }
 
-            Section {
-                Picker("窗口装饰", selection: $viewModel.windowDecorationIndex) {
-                    Text("无").tag(0)
-                    Text("标题栏").tag(1)
-                    Text("完整").tag(2)
+            Section("窗口装饰") {
+                HStack {
+                    Text("窗口装饰")
+                    Spacer()
+                    Picker("", selection: $viewModel.windowDecorationIndex) {
+                        Text("无").tag(0)
+                        Text("标题栏").tag(1)
+                        Text("完整").tag(2)
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
                 }
-                .pickerStyle(.menu)
-            } header: {
-                Text("窗口装饰")
             }
 
-            Section {
+            Section("窗口状态") {
                 Toggle("记住窗口状态", isOn: $viewModel.windowSaveStateEnabled)
-            } header: {
-                Text("窗口状态")
             }
         }
         .formStyle(.grouped)
@@ -312,32 +253,8 @@ struct KeybindingsCategoryView: View {
     var body: some View {
         Form {
             Section {
-                Text("键盘绑定")
-                    .font(.headline)
-
-                Text("配置快捷键和操作绑定")
-                    .font(.caption)
+                Text("键盘绑定功能开发中...")
                     .foregroundColor(.secondary)
-            } header: {
-                Image(systemName: "command")
-            }
-
-            Section {
-                Text("键盘绑定编辑器")
-                    .foregroundColor(.secondary)
-
-                NavigationLink("打开键盘绑定设置") {
-                    Text("配置键盘绑定")
-                        .foregroundColor(.accentColor)
-                }
-            } header: {
-                Text("自定义绑定")
-            }
-
-            Section {
-                Toggle("允许全局快捷键", isOn: $viewModel.globalShortcutsEnabled)
-            } header: {
-                Text("全局快捷键")
             }
         }
         .formStyle(.grouped)
@@ -349,38 +266,26 @@ struct AdvancedCategoryView: View {
 
     var body: some View {
         Form {
-            Section {
-                Text("高级")
-                    .font(.headline)
-
-                Text("配置高级终端设置")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } header: {
-                Image(systemName: "gearshape")
-            }
-
-            Section {
-                Picker("Shell 集成", selection: $viewModel.shellIntegrationIndex) {
-                    Text("禁用").tag(0)
-                    Text("基本").tag(1)
-                    Text("完全").tag(2)
+            Section("Shell 集成") {
+                HStack {
+                    Text("Shell 集成")
+                    Spacer()
+                    Picker("", selection: $viewModel.shellIntegrationIndex) {
+                        Text("禁用").tag(0)
+                        Text("基本").tag(1)
+                        Text("完全").tag(2)
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
                 }
-                .pickerStyle(.menu)
-            } header: {
-                Text("Shell 集成")
             }
 
-            Section {
+            Section("快速终端") {
                 Toggle("启用快速终端", isOn: $viewModel.quickTerminalEnabled)
-            } header: {
-                Text("快速终端")
             }
 
-            Section {
+            Section("调试") {
                 Toggle("显示调试信息", isOn: $viewModel.debugLoggingEnabled)
-            } header: {
-                Text("调试")
             }
         }
         .formStyle(.grouped)
@@ -394,17 +299,18 @@ struct ConfigurationSidebar: View {
 
     var body: some View {
         List(SettingsCategory.allCases, id: \.self, selection: $selectedCategory) { category in
-            Label(title: {
-                Label(systemImage: category.iconName)
+            Label {
                 Text(category.displayName)
-            })
+            } icon: {
+                Image(systemName: category.iconName)
+            }
             .tag(category)
+            .listRowBackground(
+                selectedCategory == category ?
+                    Color.accentColor.opacity(0.2) :
+                    Color.clear
+            )
         }
-        .listRowBackground(
-            selectedCategory == category ?
-                Color.accentColor.opacity(0.2) :
-                Color.clear
-        )
     }
 }
 
@@ -415,11 +321,12 @@ struct SettingsView: View {
     @State private var selectedCategory: SettingsCategory = .appearance
     @StateObject private var viewModel: SettingsViewModel
 
-    @FocusState private var isSearchFocused: Bool?
+    @FocusState private var isSearchFocused: Bool
     @State private var searchText: String = ""
 
     init() {
-        // Initialize the view model
+        // Initialize the view model with a temporary config
+        // The actual config will be loaded in onAppear
         let config = Ghostty.Config(at: nil, finalize: true)
         _viewModel = StateObject(wrappedValue: SettingsViewModel(config: config))
     }
@@ -434,6 +341,7 @@ struct SettingsView: View {
                     max: 250
                 )
 
+        } detail: {
             // Content area with toolbar
             VStack(spacing: 0) {
                 // Toolbar with search and action buttons

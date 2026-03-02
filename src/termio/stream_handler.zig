@@ -321,6 +321,7 @@ pub const StreamHandler = struct {
             .start_hyperlink => try self.startHyperlink(value.uri, value.id),
             .clipboard_contents => try self.clipboardContents(value.kind, value.data),
             .semantic_prompt => try self.semanticPrompt(value),
+            .command_history => try self.commandHistory(value),
             .mouse_shape => try self.setMouseShape(value),
             .configure_charset => self.configureCharset(value.slot, value.charset),
             .set_attribute => {
@@ -1199,6 +1200,21 @@ pub const StreamHandler = struct {
             try self.windowTitle(path);
             self.seen_title = false;
         }
+    }
+
+    fn commandHistory(
+        self: *StreamHandler,
+        cmd: Stream.Action.CommandHistory,
+    ) !void {
+        // Record the command to history for intelligent completion
+        // We send this as a message to the surface where the completion system lives
+        if (apprt.surface.Message.WriteReq.init(self.alloc, cmd.command)) |req| {
+            self.surfaceMessageWriter(.{ .command_history = req });
+        } else |err| {
+            log.warn("error creating command history message: {}", .{err});
+        }
+
+        log.debug("sending command to history: {s}", .{cmd.command});
     }
 
     fn colorOperation(

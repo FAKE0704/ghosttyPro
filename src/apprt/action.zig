@@ -447,9 +447,10 @@ pub const Action = union(Key) {
         // For ABI compatibility, we expect that this is our union size.
         // At the time of writing, we don't promise ABI compatibility
         // so we can change this but I want to be aware of it.
+        // Updated to include Completion (64 bytes on 64-bit)
         assert(@sizeOf(CValue) == switch (@sizeOf(usize)) {
-            4 => 16,
-            8 => 24,
+            4 => 32,
+            8 => 64,
             else => unreachable,
         });
     }
@@ -628,7 +629,7 @@ pub const Completion = struct {
             .preview = self.preview.ptr,
             .preview_len = self.preview.len,
             .candidate_count = self.candidate_count,
-            .selected_index = self.selected_index orelse ~@as(usize, 0),
+            .selected_index = self.selected_index,
             .pwd = self.pwd.ptr,
             .pwd_len = self.pwd.len,
         };

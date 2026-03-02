@@ -1,4 +1,5 @@
 import SwiftUI
+import GhosttyKit
 
 /// Completion menu view - displays candidate command list
 ///
@@ -92,29 +93,29 @@ struct CompletionMenuItem: View {
 // Preview provider for SwiftUI canvas
 struct CompletionMenuView_Previews: PreviewProvider {
     static var previews: some View {
-        let mockState = Ghostty.SurfaceView.CompletionState(
-            inputPrefix: "git",
-            previewText: " push",
-            candidates: [
-                Ghostty.SurfaceView.CompletionCandidate(
-                    command: "git push",
-                    frequency: 45
-                ),
-                Ghostty.SurfaceView.CompletionCandidate(
-                    command: "git pull",
-                    frequency: 23
-                ),
-                Ghostty.SurfaceView.CompletionCandidate(
-                    command: "git status",
-                    frequency: 12
-                ),
-            ],
-            selectedIndex: 0,
-            isMenuVisible: true
-        )
-
         CompletionMenuView(
-            completionState: mockState,
+            completionState: {
+                let state = Ghostty.SurfaceView.CompletionState()
+                state.inputPrefix = "git"
+                state.previewText = " push"
+                state.candidates = [
+                    Ghostty.SurfaceView.CompletionCandidate(
+                        command: "git push",
+                        frequency: 45
+                    ),
+                    Ghostty.SurfaceView.CompletionCandidate(
+                        command: "git pull",
+                        frequency: 23
+                    ),
+                    Ghostty.SurfaceView.CompletionCandidate(
+                        command: "git status",
+                        frequency: 12
+                    ),
+                ]
+                state.selectedIndex = 0
+                state.isMenuVisible = true
+                return state
+            }(),
             cellSize: CGSize(width: 10, height: 20)
         )
         .previewDisplayName("Completion Menu")

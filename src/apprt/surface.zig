@@ -99,6 +99,9 @@ pub const Message = union(enum) {
     /// of the command.
     stop_command: ?u8,
 
+    /// Record a command to history for intelligent completion
+    command_history: WriteReq,
+
     /// The scrollbar state changed for the surface.
     scrollbar: terminal.Scrollbar,
 
