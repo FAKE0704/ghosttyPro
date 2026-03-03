@@ -1320,25 +1320,9 @@ extension Ghostty.SurfaceView {
 
         /// Update state from completion action
         func update(from action: Ghostty.Action.Completion) {
-            // Log to file for debugging
-            let logString = "[Completion] Received: seq=\(action.sequence), prefix='\(action.prefix ?? "nil")', preview='\(action.preview ?? "nil")', lastSeq=\(lastUpdateSequence)\n"
-            if let data = logString.data(using: .utf8) {
-                if let handle = FileHandle(forWritingAtPath: "/tmp/ghostty_completion.log") {
-                    handle.seekToEndOfFile()
-                    handle.write(data)
-                } else {
-                    FileManager.default.createFile(atPath: "/tmp/ghostty_completion.log", contents: data)
-                }
-            }
-
             // Only process updates with newer sequence numbers
             // This prevents stale updates from overwriting newer data
             if action.sequence <= lastUpdateSequence {
-                let rejectString = "[Completion] Rejected: seq=\(action.sequence) <= lastSeq=\(lastUpdateSequence)\n"
-                if let data = rejectString.data(using: .utf8), let handle = FileHandle(forWritingAtPath: "/tmp/ghostty_completion.log") {
-                    handle.seekToEndOfFile()
-                    handle.write(data)
-                }
                 return
             }
             lastUpdateSequence = action.sequence
@@ -1352,12 +1336,6 @@ extension Ghostty.SurfaceView {
             }
 
             self.selectedIndex = action.selectedIndex
-
-            let updateString = "[Completion] Applied: prefix='\(self.inputPrefix)', preview='\(self.previewText)'\n"
-            if let data = updateString.data(using: .utf8), let handle = FileHandle(forWritingAtPath: "/tmp/ghostty_completion.log") {
-                handle.seekToEndOfFile()
-                handle.write(data)
-            }
 
             // Note: candidates are managed separately through action callbacks
             // This state update is triggered by the completion action from Zig layer
