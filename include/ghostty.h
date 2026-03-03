@@ -625,6 +625,7 @@ typedef struct {
   size_t selected_index;
   const char *pwd;
   size_t pwd_len;
+  uint64_t sequence;
 } ghostty_action_completion_s;
 
 // apprt.action.CompletionSubmit

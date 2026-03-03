@@ -447,10 +447,10 @@ pub const Action = union(Key) {
         // For ABI compatibility, we expect that this is our union size.
         // At the time of writing, we don't promise ABI compatibility
         // so we can change this but I want to be aware of it.
-        // Updated to include Completion (64 bytes on 64-bit)
+        // Updated to include Completion with sequence field (72 bytes on 64-bit)
         assert(@sizeOf(CValue) == switch (@sizeOf(usize)) {
-            4 => 32,
-            8 => 64,
+            4 => 36,
+            8 => 72,
             else => unreachable,
         });
     }
@@ -594,6 +594,9 @@ pub const Completion = struct {
     /// The working directory for context-aware completion
     pwd: [:0]const u8 = "",
 
+    /// Update sequence number to prevent stale updates
+    sequence: u64 = 0,
+
     // Sync with: ghostty_action_completion_s
     pub const C = extern struct {
         /// Input prefix (what user has typed)
@@ -619,6 +622,9 @@ pub const Completion = struct {
 
         /// Length of pwd
         pwd_len: usize,
+
+        /// Update sequence number to prevent stale updates
+        sequence: u64,
     };
 
     /// Convert to C ABI compatible value
@@ -632,6 +638,7 @@ pub const Completion = struct {
             .selected_index = self.selected_index,
             .pwd = self.pwd.ptr,
             .pwd_len = self.pwd.len,
+            .sequence = self.sequence,
         };
     }
 };

@@ -7,8 +7,8 @@ import GhosttyKit
 /// positioned at the cursor location. It provides a visual hint of what
 /// would be completed if the user presses Tab.
 struct CompletionPreviewView: View {
-    /// The completion state containing preview data
-    let completionState: Ghostty.SurfaceView.CompletionState?
+    /// Observed completion state
+    @ObservedObject var completionState: Ghostty.SurfaceView.CompletionState
 
     /// Cell size for proper font sizing
     let cellSize: CGSize
@@ -17,9 +17,11 @@ struct CompletionPreviewView: View {
     let surface: ghostty_surface_t
 
     var body: some View {
-        if let state = completionState,
-           !state.previewText.isEmpty,
-           !state.inputPrefix.isEmpty {
+        // Use a computed property that forces view refresh when data changes
+        let previewValue = completionState.previewText
+        let prefixValue = completionState.inputPrefix
+
+        if !previewValue.isEmpty && !prefixValue.isEmpty {
             GeometryReader { geometry in
                 // Get cursor position from surface
                 let cursorPos = getCursorPosition()
@@ -34,11 +36,26 @@ struct CompletionPreviewView: View {
                     Color.clear
                         .frame(width: 1, height: 1)
 
-                    // Completion preview text
-                    Text(state.previewText)
-                        .foregroundColor(.secondary.opacity(0.5))
-                        .font(.system(size: cellSize.height * 0.9, design: .monospaced))
-                        .offset(x: xOffset, y: yOffset)
+                    // HStack for completion text and Tab hint
+                    HStack(spacing: 4) {
+                        // Completion preview text
+                        Text(previewValue)
+                            .foregroundColor(.secondary.opacity(0.5))
+                            .font(.system(size: cellSize.height * 0.9, design: .monospaced))
+                            // Force view refresh when previewText changes
+                            .id("preview-\(previewValue)-\(prefixValue)")
+
+                        // Tab key hint with icon
+                        HStack(spacing: 2) {
+                            Image(systemName: "arrow.right.to.line.alt")
+                                .font(.system(size: cellSize.height * 0.5))
+                            Text("Tab")
+                                .font(.system(size: cellSize.height * 0.6, design: .monospaced))
+                        }
+                        .foregroundColor(.secondary.opacity(0.3))
+                        .padding(.leading, 4)
+                    }
+                    .offset(x: xOffset, y: yOffset)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
             }

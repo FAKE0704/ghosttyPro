@@ -180,6 +180,9 @@ extension Ghostty.Action {
         /// The working directory for context-aware completion
         let pwd: String?
 
+        /// Update sequence number to prevent stale updates
+        let sequence: UInt64
+
         init(c: ghostty_action_completion_s) {
             if let prefixPtr = c.prefix {
                 self.prefix = String(cString: prefixPtr)
@@ -201,6 +204,8 @@ extension Ghostty.Action {
             } else {
                 self.pwd = nil
             }
+
+            self.sequence = c.sequence
         }
     }
 

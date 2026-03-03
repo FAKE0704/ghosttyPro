@@ -216,6 +216,9 @@ const CompletionState = struct {
     completion_system: *terminal.Completion,
     allocator: Allocator,
 
+    /// Update sequence counter to prevent stale updates
+    update_sequence: u64 = 0,
+
     /// Current completion data (for Swift layer to read)
     current_completion: struct {
         prefix: []const u8 = "",
@@ -249,6 +252,7 @@ const CompletionState = struct {
         config: *const configpkg.Config,
     ) !void {
         self.allocator = alloc;
+        self.update_sequence = 0;
 
         // Create history manager configuration
         const hm_config = terminal.HistoryManager.Config{
@@ -3374,6 +3378,9 @@ fn handleCompletionInput(self: *Surface, bytes: []const u8) !void {
 
 /// Send completion state update to macOS layer
 fn sendCompletionUpdate(self: *Surface, comp: *CompletionState) !void {
+    // Increment update sequence to prevent stale updates
+    comp.update_sequence +%= 1;
+
     // Get current completion data
     const current_completion = comp.completion_system.getCurrentCompletion();
     const candidates = comp.completion_system.getCandidates();
@@ -3383,8 +3390,11 @@ fn sendCompletionUpdate(self: *Surface, comp: *CompletionState) !void {
     // Get input prefix
     const input_prefix = comp.completion_system.inputPrefix();
 
-    log.info("Completion update: prefix='{s}', candidates={d}", .{
-        input_prefix, candidates.len
+    // Log preview for debugging
+    const preview_str = if (current_completion) |cc| cc else "(null)";
+
+    log.info("Completion update: prefix='{s}', preview='{s}', candidates={d}, sequence={d}", .{
+        input_prefix, preview_str, candidates.len, comp.update_sequence
     });
 
     // Update completion state data (for Swift layer to read)
@@ -3421,6 +3431,7 @@ fn sendCompletionUpdate(self: *Surface, comp: *CompletionState) !void {
         .candidate_count = candidates.len,
         .selected_index = if (selected_idx < candidates.len) selected_idx else candidates.len,
         .pwd = pwd_z[0..pwd_z.len :0],
+        .sequence = comp.update_sequence,
     };
 
     // Send completion action using performAction
