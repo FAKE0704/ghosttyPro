@@ -3376,6 +3376,32 @@ fn handleCompletionInput(self: *Surface, bytes: []const u8) !void {
     }
 }
 
+/// Handle completion system for special keys (backspace, etc.)
+pub fn handleCompletionSpecialKey(self: *Surface, key: []const u8) !void {
+    const comp = self.completion orelse return;
+    const current_path = self.io.terminal.getPwd();
+
+    log.debug("handleCompletionSpecialKey: key='{s}'", .{key});
+
+    // Parse the key and handle accordingly
+    const key_type = std.meta.stringToEnum(terminal.Completion.Key, key) orelse {
+        log.warn("unknown completion key: {s}", .{key});
+        return;
+    };
+
+    _ = comp.completion_system.handleKey(
+        key_type,
+        comp.history_manager,
+        current_path,
+    ) catch |err| {
+        log.warn("completion handleKey error: {}", .{err});
+        return;
+    };
+
+    // Send completion update to macOS layer
+    try self.sendCompletionUpdate(comp);
+}
+
 /// Send completion state update to macOS layer
 fn sendCompletionUpdate(self: *Surface, comp: *CompletionState) !void {
     // Increment update sequence to prevent stale updates

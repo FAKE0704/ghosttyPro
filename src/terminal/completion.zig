@@ -132,7 +132,7 @@ pub const Completion = struct {
     pub fn handleKey(
         self: *Completion,
         key: Key,
-        history: *const HistoryManager,
+        history: *HistoryManager,
         current_path: ?[]const u8,
     ) !?Event {
         return switch (key) {
@@ -195,7 +195,7 @@ pub const Completion = struct {
 
     fn handleTab(
         self: *Completion,
-        history: *const HistoryManager,
+        history: *HistoryManager,
         current_path: ?[]const u8,
     ) !?Event {
         // If we have candidates, accept the current selection
@@ -270,7 +270,7 @@ pub const Completion = struct {
         history: *const HistoryManager,
         current_path: ?[]const u8,
     ) !?Event {
-        if (self.input_buffer.popOrNull() == null) {
+        if (self.input_buffer.pop() == null) {
             // Buffer is empty, send backspace to PTY
             return .{ .input_bytes = &[_]u8{127} }; // DEL
         }
@@ -284,7 +284,7 @@ pub const Completion = struct {
 
     fn handleEnter(self: *Completion) !?Event {
         // Submit current input
-        const input = try self.input_buffer.toOwnedSlice();
+        const input = try self.input_buffer.toOwnedSlice(self.allocator);
         self.reset();
 
         return .{ .command_submitted = input };

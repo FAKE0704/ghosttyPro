@@ -1805,6 +1805,19 @@ pub const CAPI = struct {
         surface.textCallback(ptr[0..len]);
     }
 
+    /// Handle a special key for the completion system (e.g., backspace).
+    /// The key parameter should be a string representing the key: "backspace".
+    export fn ghostty_surface_completion_special_key(
+        surface: *Surface,
+        key: [*]const u8,
+        len: usize,
+    ) void {
+        const key_slice = key[0..len];
+        surface.core().handleCompletionSpecialKey(key_slice) catch |err| {
+            log.warn("ghostty_surface_completion_special_key error: {}", .{err});
+        };
+    }
+
     /// Set the preedit text for the surface. This is used for IME
     /// composition. If the length is 0, then the preedit text is cleared.
     export fn ghostty_surface_preedit(

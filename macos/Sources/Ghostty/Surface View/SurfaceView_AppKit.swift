@@ -1721,6 +1721,17 @@ extension Ghostty {
                 completionState = nil
                 return true
 
+            case 117, 51: // Forward-delete (117) and Backspace (51)
+                // Notify Zig layer completion system about the delete key
+                // This keeps the completion's input_buffer in sync with actual terminal input
+                if let surface = self.surface {
+                    let keyName = "backspace"
+                    keyName.withCString { cString in
+                        ghostty_surface_completion_special_key(surface, cString)
+                    }
+                }
+                return false // Let the delete key be processed normally
+
             default:
                 return false
             }

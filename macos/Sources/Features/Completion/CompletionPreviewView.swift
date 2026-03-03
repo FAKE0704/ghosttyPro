@@ -55,6 +55,7 @@ struct CompletionPreviewView: View {
                         .foregroundColor(.secondary.opacity(0.3))
                         .padding(.leading, 4)
                     }
+                    .fixedSize(horizontal: true, vertical: false)
                     .offset(x: xOffset, y: yOffset)
                 }
                 .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
