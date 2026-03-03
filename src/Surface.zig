@@ -2891,8 +2891,19 @@ pub fn keyCallback(
         }, .unlocked);
 
         // Handle completion system for character input
+        // Skip control characters (like backspace 0x7F) which are handled separately
         if (self.completion != null and event.action == .press and event.utf8.len > 0) {
-            try self.handleCompletionInput(event.utf8);
+            // Filter out control characters (0x00-0x1F and 0x7F)
+            var has_control = false;
+            for (event.utf8) |ch| {
+                if (ch < 0x20 or ch == 0x7F) {
+                    has_control = true;
+                    break;
+                }
+            }
+            if (!has_control) {
+                try self.handleCompletionInput(event.utf8);
+            }
         }
     } else {
         // No valid request means that we didn't encode anything.
@@ -3359,6 +3370,7 @@ fn handleCompletionInput(self: *Surface, bytes: []const u8) !void {
     const current_path = self.io.terminal.getPwd();
 
     log.debug("handleCompletionInput: bytes='{s}', path='{s}'", .{ bytes, current_path orelse "(null)" });
+    std.log.info(">>> Zig: handleCompletionInput bytes='{s}', input_buffer before='{s}'", .{bytes, comp.completion_system.inputPrefix()});
 
     // Process each character through the completion system
     for (bytes) |ch| {
@@ -3371,9 +3383,13 @@ fn handleCompletionInput(self: *Surface, bytes: []const u8) !void {
             return;
         };
 
+        std.log.info(">>> Zig: after handleChar, input_buffer='{s}'", .{comp.completion_system.inputPrefix()});
+
         // Send completion update to macOS layer
         try self.sendCompletionUpdate(comp);
     }
+
+    std.log.info(">>> Zig: handleCompletionInput done, sequence={d}", .{comp.update_sequence});
 }
 
 /// Handle completion system for special keys (backspace, etc.)
@@ -3382,6 +3398,7 @@ pub fn handleCompletionSpecialKey(self: *Surface, key: []const u8) !void {
     const current_path = self.io.terminal.getPwd();
 
     log.debug("handleCompletionSpecialKey: key='{s}'", .{key});
+    std.log.info(">>> Zig: handleCompletionSpecialKey key={s}, input_buffer before='{s}'", .{key, comp.completion_system.inputPrefix()});
 
     // Parse the key and handle accordingly
     const key_type = std.meta.stringToEnum(terminal.Completion.Key, key) orelse {
@@ -3398,8 +3415,12 @@ pub fn handleCompletionSpecialKey(self: *Surface, key: []const u8) !void {
         return;
     };
 
+    std.log.info(">>> Zig: after handleKey, input_buffer='{s}'", .{comp.completion_system.inputPrefix()});
+
     // Send completion update to macOS layer
     try self.sendCompletionUpdate(comp);
+
+    std.log.info(">>> Zig: sendCompletionUpdate done, sequence={d}", .{comp.update_sequence});
 }
 
 /// Send completion state update to macOS layer

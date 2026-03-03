@@ -1806,13 +1806,13 @@ pub const CAPI = struct {
     }
 
     /// Handle a special key for the completion system (e.g., backspace).
-    /// The key parameter should be a string representing the key: "backspace".
+    /// The key parameter should be a null-terminated string representing the key: "backspace".
     export fn ghostty_surface_completion_special_key(
         surface: *Surface,
-        key: [*]const u8,
-        len: usize,
+        key: [*:0]const u8,
     ) void {
-        const key_slice = key[0..len];
+        // Convert null-terminated C string to slice
+        const key_slice = std.mem.span(key);
         surface.core().handleCompletionSpecialKey(key_slice) catch |err| {
             log.warn("ghostty_surface_completion_special_key error: {}", .{err});
         };

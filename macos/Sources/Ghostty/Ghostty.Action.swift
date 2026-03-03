@@ -184,15 +184,32 @@ extension Ghostty.Action {
         let sequence: UInt64
 
         init(c: ghostty_action_completion_s) {
+            // Use pointer and length to safely create strings
+            // We need to handle nil pointers differently from empty strings
+            // nil pointer = nil string, empty string = ""
             if let prefixPtr = c.prefix {
-                self.prefix = String(cString: prefixPtr)
+                if c.prefix_len > 0 {
+                    let buffer = UnsafeBufferPointer<UInt8>(start: UnsafeRawPointer(prefixPtr).assumingMemoryBound(to: UInt8.self), count: c.prefix_len)
+                    self.prefix = String(decoding: buffer, as: UTF8.self)
+                } else {
+                    // Empty string (not nil)
+                    self.prefix = ""
+                }
             } else {
+                // Null pointer
                 self.prefix = nil
             }
 
             if let previewPtr = c.preview {
-                self.preview = String(cString: previewPtr)
+                if c.preview_len > 0 {
+                    let buffer = UnsafeBufferPointer<UInt8>(start: UnsafeRawPointer(previewPtr).assumingMemoryBound(to: UInt8.self), count: c.preview_len)
+                    self.preview = String(decoding: buffer, as: UTF8.self)
+                } else {
+                    // Empty string (not nil)
+                    self.preview = ""
+                }
             } else {
+                // Null pointer
                 self.preview = nil
             }
 
@@ -200,7 +217,12 @@ extension Ghostty.Action {
             self.selectedIndex = Int(c.selected_index)
 
             if let pwdPtr = c.pwd {
-                self.pwd = String(cString: pwdPtr)
+                if c.pwd_len > 0 {
+                    let buffer = UnsafeBufferPointer<UInt8>(start: UnsafeRawPointer(pwdPtr).assumingMemoryBound(to: UInt8.self), count: c.pwd_len)
+                    self.pwd = String(decoding: buffer, as: UTF8.self)
+                } else {
+                    self.pwd = ""
+                }
             } else {
                 self.pwd = nil
             }

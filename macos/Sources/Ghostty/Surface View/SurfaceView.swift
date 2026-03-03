@@ -1320,25 +1320,31 @@ extension Ghostty.SurfaceView {
 
         /// Update state from completion action
         func update(from action: Ghostty.Action.Completion) {
+            // Debug logging to stderr
+            let timestamp = Date().timeIntervalSince1970
+            fputs(">>> [\(timestamp)] CompletionState.update: prefix='\(action.prefix ?? "nil")', preview='\(action.preview ?? "nil")', seq=\(action.sequence), lastSeq=\(lastUpdateSequence)\n", stderr)
+
             // Only process updates with newer sequence numbers
             // This prevents stale updates from overwriting newer data
             if action.sequence <= lastUpdateSequence {
+                fputs(">>> [\(timestamp)] CompletionState.update IGNORED (stale sequence)\n", stderr)
                 return
             }
             lastUpdateSequence = action.sequence
 
+            // Update prefix (nil means no update, empty string is valid)
             if let prefix = action.prefix {
                 self.inputPrefix = prefix
             }
 
+            // Update preview (nil means no update, empty string clears preview)
             if let preview = action.preview {
                 self.previewText = preview
             }
 
             self.selectedIndex = action.selectedIndex
 
-            // Note: candidates are managed separately through action callbacks
-            // This state update is triggered by the completion action from Zig layer
+            fputs(">>> [\(timestamp)] CompletionState.update DONE: inputPrefix='\(inputPrefix)', previewText='\(previewText)'\n", stderr)
         }
 
         /// Reset to idle state

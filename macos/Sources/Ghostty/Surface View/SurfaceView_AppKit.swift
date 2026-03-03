@@ -1030,6 +1030,12 @@ extension Ghostty {
         }
 
         override func keyDown(with event: NSEvent) {
+            // Debug logging for character input
+            if completionState != nil && event.keyCode != 53 && event.characters != nil {
+                let timestamp = Date().timeIntervalSince1970
+                fputs(">>> [Swift] keyDown: keyCode=\(event.keyCode), chars='\(event.characters!)'\n", stderr)
+            }
+
             // Handle completion mode keys before sending to PTY
             if let completion = completionState {
                 if handleCompletionKey(event, completion: completion) {
@@ -1724,12 +1730,16 @@ extension Ghostty {
             case 117, 51: // Forward-delete (117) and Backspace (51)
                 // Notify Zig layer completion system about the delete key
                 // This keeps the completion's input_buffer in sync with actual terminal input
+                fputs(">>> [Swift] handleCompletionKey: backspace detected\n", stderr)
                 if let surface = self.surface {
                     let keyName = "backspace"
                     keyName.withCString { cString in
+                        fputs(">>> [Swift] calling ghostty_surface_completion_special_key\n", stderr)
                         ghostty_surface_completion_special_key(surface, cString)
+                        fputs(">>> [Swift] returned from ghostty_surface_completion_special_key\n", stderr)
                     }
                 }
+                fputs(">>> [Swift] returning false to let backspace be processed normally\n", stderr)
                 return false // Let the delete key be processed normally
 
             default:
