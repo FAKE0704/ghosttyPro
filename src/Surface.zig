@@ -216,7 +216,26 @@ const CompletionState = struct {
     completion_system: *terminal.Completion,
     allocator: Allocator,
 
+    /// Current completion data (for Swift layer to read)
+    current_completion: struct {
+        prefix: []const u8 = "",
+        preview: []const u8 = "",
+        candidate_count: usize = 0,
+        selected_index: usize = 0,
+    } = .{},
+
     pub fn deinit(self: *CompletionState) void {
+        // Save history to file before deinitializing
+        const history_path = terminal.HistoryManager.getDefaultHistoryPath(self.allocator) catch |err| {
+            log.err("failed to get history path: {}", .{err});
+            return;
+        };
+        defer self.allocator.free(history_path);
+
+        self.history_manager.saveToFile(history_path) catch |err| {
+            log.err("failed to save completion history: {}", .{err});
+        };
+
         self.completion_system.deinit();
         self.allocator.destroy(self.completion_system);
         self.history_manager.deinit();
@@ -234,13 +253,23 @@ const CompletionState = struct {
         // Create history manager configuration
         const hm_config = terminal.HistoryManager.Config{
             .max_history_size = config.@"completion-history-max-size",
-            .min_frequency_threshold = 2,
+            .min_frequency_threshold = 1,
             .enable_global = true,
             .enable_per_directory = config.@"completion-history-per-directory",
         };
 
         self.history_manager = try alloc.create(terminal.HistoryManager);
         self.history_manager.* = try terminal.HistoryManager.init(alloc, hm_config);
+
+        // Load history from file if it exists
+        const history_path = try terminal.HistoryManager.getDefaultHistoryPath(alloc);
+        defer alloc.free(history_path);
+        log.info("Loading completion history from: {s}", .{history_path});
+        self.history_manager.loadFromFile(history_path) catch |err| {
+            log.warn("failed to load completion history: {}", .{err});
+            // Continue without history - it will be built up over time
+        };
+        log.info("Completion history loaded successfully", .{});
 
         // Create completion system configuration
         const max_candidates: usize = @intCast(config.@"completion-max-candidates");
@@ -1138,6 +1167,9 @@ pub fn handleMessage(self: *Surface, msg: Message) !void {
                 comp.history_manager.recordCommand(current_dir, cmd) catch |err| {
                     log.warn("failed to record command to history: {}", .{err});
                 };
+
+                // Reset completion state for new command
+                comp.completion_system.reset();
             }
 
             log.debug("recorded command to history: {s}", .{cmd});
@@ -3322,6 +3354,8 @@ fn handleCompletionInput(self: *Surface, bytes: []const u8) !void {
     const comp = self.completion orelse return;
     const current_path = self.io.terminal.getPwd();
 
+    log.debug("handleCompletionInput: bytes='{s}', path='{s}'", .{ bytes, current_path orelse "(null)" });
+
     // Process each character through the completion system
     for (bytes) |ch| {
         _ = comp.completion_system.handleChar(
@@ -3349,6 +3383,18 @@ fn sendCompletionUpdate(self: *Surface, comp: *CompletionState) !void {
     // Get input prefix
     const input_prefix = comp.completion_system.inputPrefix();
 
+    log.info("Completion update: prefix='{s}', candidates={d}", .{
+        input_prefix, candidates.len
+    });
+
+    // Update completion state data (for Swift layer to read)
+    comp.current_completion = .{
+        .prefix = input_prefix,
+        .preview = if (current_completion) |cc| cc else "",
+        .candidate_count = candidates.len,
+        .selected_index = selected_idx,
+    };
+
     // Create zero-terminated strings for C API
     const prefix_z = try self.alloc.dupeZ(u8, input_prefix);
     defer self.alloc.free(prefix_z);
@@ -3373,7 +3419,7 @@ fn sendCompletionUpdate(self: *Surface, comp: *CompletionState) !void {
         .prefix = prefix_z[0..prefix_z.len :0],
         .preview = preview_z[0..preview_z.len :0],
         .candidate_count = candidates.len,
-        .selected_index = if (selected_idx < candidates.len) selected_idx else std.math.maxInt(usize),
+        .selected_index = if (selected_idx < candidates.len) selected_idx else candidates.len,
         .pwd = pwd_z[0..pwd_z.len :0],
     };
 

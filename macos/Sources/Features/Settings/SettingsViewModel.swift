@@ -217,11 +217,26 @@ class SettingsViewModel: ObservableObject {
 
     /// Save all changes to the configuration file
     func save() -> Bool {
-        // Build settings dictionary
+        // First update the in-memory config object
+        updateConfigFromViewModel()
+
+        // Build settings dictionary for file persistence
         var settings: [String: String] = [:]
         settings["completion-enabled"] = completionEnabled ? "true" : "false"
         settings["completion-min-chars"] = String(completionMinChars)
         settings["completion-mode"] = completionModeIndex == 0 ? "inline" : "menu"
+
+        // Add shell-integration setting
+        let shellIntegrationValue: String
+        switch shellIntegrationIndex {
+        case 0:
+            shellIntegrationValue = "none"      // disabled
+        case 1, 2:
+            shellIntegrationValue = "detect"    // basic or full (auto-detect)
+        default:
+            shellIntegrationValue = "detect"
+        }
+        settings["shell-integration"] = shellIntegrationValue
 
         // Save to file
         let success = config.save(settings: settings)
@@ -250,6 +265,10 @@ class SettingsViewModel: ObservableObject {
 
         let completionModeValue = completionModeIndex == 0 ? "inline" : "menu"
         config.setString("completion-mode", completionModeValue)
+
+        // Update shell-integration setting
+        let shellIntegrationValue = shellIntegrationIndex == 0 ? "none" : "detect"
+        config.setString("shell-integration", shellIntegrationValue)
 
         // Update other settings
         // This would use ghostty_config_set for each key

@@ -206,21 +206,15 @@ extension Ghostty {
 
                 // Completion preview (inline gray suggestion)
                 if let completion = surfaceView.completionState,
-                   !completion.previewText.isEmpty {
+                   !completion.previewText.isEmpty,
+                   let surface = surfaceView.surface {
                     GeometryReader { geo in
-                        VStack {
-                            Spacer()
-                                .frame(height: geo.size.height * 0.75)
-
-                            CompletionPreviewView(
-                                completionState: completion,
-                                cellSize: surfaceView.cellSize
-                            )
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.leading, surfaceView.cellSize.width * 0.2)
-                        }
+                        CompletionPreviewView(
+                            completionState: completion,
+                            cellSize: surfaceView.cellSize,
+                            surface: surface
+                        )
                         .frame(width: geo.size.width, height: geo.size.height)
-                        .allowsHitTesting(false)
                     }
                 }
 
@@ -1324,12 +1318,14 @@ extension Ghostty.SurfaceView {
         /// Update state from completion action
         func update(from action: Ghostty.Action.Completion) {
             if let prefix = action.prefix {
-                self.inputPrefix = String(cString: prefix)
+                self.inputPrefix = prefix
             }
 
             if let preview = action.preview {
-                self.previewText = String(cString: preview)
+                self.previewText = preview
             }
+
+            self.selectedIndex = action.selectedIndex
 
             // Note: candidates are managed separately through action callbacks
             // This state update is triggered by the completion action from Zig layer

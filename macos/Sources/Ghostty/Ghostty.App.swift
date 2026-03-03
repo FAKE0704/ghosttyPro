@@ -633,6 +633,9 @@ extension Ghostty {
             case GHOSTTY_ACTION_SEARCH_SELECTED:
                 searchSelected(app, target: target, v: action.action.search_selected)
 
+            case GHOSTTY_ACTION_COMPLETION:
+                completionUpdate(app, target: target, v: action.action.completion)
+
             case GHOSTTY_ACTION_PRESENT_TERMINAL:
                 return presentTerminal(app, target: target)
 
@@ -1962,6 +1965,38 @@ extension Ghostty {
                 let selected: UInt? = v.selected >= 0 ? UInt(v.selected) : nil
                 DispatchQueue.main.async {
                     surfaceView.searchState?.selected = selected
+                }
+
+            default:
+                assertionFailure()
+            }
+        }
+
+        private static func completionUpdate(
+            _ app: ghostty_app_t,
+            target: ghostty_target_s,
+            v: ghostty_action_completion_s) {
+            switch (target.tag) {
+            case GHOSTTY_TARGET_APP:
+                Ghostty.logger.warning("completion does nothing with an app target")
+                return
+
+            case GHOSTTY_TARGET_SURFACE:
+                guard let surface = target.target.surface else { return }
+                guard let surfaceView = self.surfaceView(from: surface) else { return }
+
+                // Extract data from C struct BEFORE async dispatch
+                // The C strings in v are only valid in this call context
+                let completionAction = Ghostty.Action.Completion(c: v)
+
+                DispatchQueue.main.async {
+                    // Create or update completion state
+                    if surfaceView.completionState == nil {
+                        surfaceView.completionState = SurfaceView.CompletionState()
+                    }
+
+                    // Update from the action data
+                    surfaceView.completionState?.update(from: completionAction)
                 }
 
             default:

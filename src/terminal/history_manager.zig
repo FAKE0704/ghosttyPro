@@ -124,6 +124,11 @@ pub const HistoryManager = struct {
                 try self.pruneHistory(gop.value_ptr);
             }
         }
+
+        // Save to file after each command
+        const history_path = try getDefaultHistoryPath(self.allocator);
+        defer self.allocator.free(history_path);
+        try self.saveToFile(history_path);
     }
 
     /// Get completion candidates for a given prefix
@@ -163,9 +168,19 @@ pub const HistoryManager = struct {
             // Skip if below threshold
             if (entry.value_ptr.* < self.config.min_frequency_threshold) continue;
 
+            // Trim leading whitespace from prefix for matching
+            const trimmed_prefix = std.mem.trimLeft(u8, prefix, " \t");
+
+            log.debug("Checking match: cmd='{s}', prefix='{s}', trimmed='{s}'", .{
+                entry.key_ptr.*, prefix, trimmed_prefix
+            });
+
             // Check prefix match (case-sensitive for commands)
-            if (std.mem.startsWith(u8, entry.key_ptr.*, prefix)) {
+            if (std.mem.startsWith(u8, entry.key_ptr.*, trimmed_prefix)) {
                 const score = self.calculateScore(entry.value_ptr.*, entry.key_ptr.*);
+                log.debug("Match found: cmd='{s}', freq={d}", .{
+                    entry.key_ptr.*, entry.value_ptr.*
+                });
 
                 try results.append(allocator, .{
                     .command = try allocator.dupe(u8, entry.key_ptr.*),
@@ -175,7 +190,7 @@ pub const HistoryManager = struct {
             }
         }
 
-        // Sort by frequency (descending), then by length (ascending)
+        // Sort by frequency (descending only)
         const SortContext = struct {
             fn lessThan(
                 context: void,
@@ -183,12 +198,7 @@ pub const HistoryManager = struct {
                 b: Completion,
             ) bool {
                 _ = context;
-                // Primary: frequency descending
-                if (a.frequency != b.frequency) {
-                    return a.frequency > b.frequency;
-                }
-                // Secondary: command length ascending (shorter commands first)
-                return a.command.len < b.command.len;
+                return a.frequency > b.frequency;
             }
         };
 
@@ -306,60 +316,56 @@ pub const HistoryManager = struct {
 
     /// Save history to file
     pub fn saveToFile(self: *const HistoryManager, path: []const u8) !void {
-        const file = try std.fs.cwd().createFile(path, .{ .read = true });
+        var file = try std.fs.cwd().createFile(path, .{ .read = true });
         defer file.close();
 
-        const writer = file.writer();
-        defer {
-            // Catch any errors during close but don't fail
-            writer.flush() catch |err| {
-                log.warn("error flushing completion history: {}", .{err});
-            };
-        }
+        var buffer: [4096]u8 = undefined;
+        var writer = file.writer(&buffer);
 
         // Write JSON header
-        try writer.print("{{\n", .{});
-        try writer.writeAll("\"version\": 1,\n");
+        try writer.interface.writeAll("{\n");
+        try writer.interface.writeAll("\"version\": 1,\n");
 
         // Write global history
-        try writer.writeAll("\"global\": {{\n");
+        try writer.interface.writeAll("\"global\": {\n");
         var first = true;
         var iter = self.global_history.commands.iterator();
         while (iter.next()) |entry| {
-            if (!first) try writer.writeAll(",\n");
+            if (!first) try writer.interface.writeAll(",\n");
             first = false;
 
             // Escape JSON string
-            try writer.print("  \"{s}\": {d}", .{ entry.key_ptr.*, entry.value_ptr.* });
+            try writer.interface.print("  \"{s}\": {d}", .{ entry.key_ptr.*, entry.value_ptr.* });
         }
-        try writer.writeAll("\n}}");
+        try writer.interface.writeAll("\n}");
 
         // Write per-directory history
         if (self.history_by_path.count() > 0) {
-            try writer.writeAll(",\n\"directories\": {{\n");
+            try writer.interface.writeAll(",\n\"directories\": {\n");
 
             var dir_iter = self.history_by_path.iterator();
             var dir_first = true;
             while (dir_iter.next()) |dir_entry| {
-                if (!dir_first) try writer.writeAll(",\n");
+                if (!dir_first) try writer.interface.writeAll(",\n");
                 dir_first = false;
 
-                try writer.print("  \"{s}\": {{\n", .{ dir_entry.key_ptr.* });
+                try writer.interface.print("  \"{s}\": {{\n", .{ dir_entry.key_ptr.* });
 
                 var cmd_first = true;
                 var cmd_iter = dir_entry.value_ptr.commands.iterator();
                 while (cmd_iter.next()) |cmd_entry| {
-                    if (!cmd_first) try writer.writeAll(",\n");
+                    if (!cmd_first) try writer.interface.writeAll(",\n");
                     cmd_first = false;
 
-                    try writer.print("    \"{s}\": {d}", .{ cmd_entry.key_ptr.*, cmd_entry.value_ptr.* });
+                    try writer.interface.print("    \"{s}\": {d}", .{ cmd_entry.key_ptr.*, cmd_entry.value_ptr.* });
                 }
-                try writer.writeAll("\n  }}");
+                try writer.interface.writeAll("\n  }");
             }
-            try writer.writeAll("\n}}");
+            try writer.interface.writeAll("\n}");
         }
 
-        try writer.writeAll("\n}}\n");
+        try writer.interface.writeAll("\n}\n");
+        try writer.interface.flush();
     }
 
     /// Load history from file
@@ -374,7 +380,7 @@ pub const HistoryManager = struct {
         defer file.close();
 
         const max_size = 10 * 1024 * 1024; // 10MB max
-        const content = try file.readAllAlloc(self.allocator, max_size);
+        const content = try file.readToEndAlloc(self.allocator, max_size);
         defer self.allocator.free(content);
 
         // Parse JSON (simplified - for production use a proper JSON parser)
@@ -412,7 +418,7 @@ pub const HistoryManager = struct {
                 if (std.mem.indexOf(u8, line, ":")) |idx| {
                     const cmd = trimmed[1 .. idx];
                     const count_str = trimmed[idx + 1 ..];
-                    const count = std.fmt.parseInt(usize, count_str) catch continue;
+                    const count = std.fmt.parseInt(usize, count_str, 10) catch continue;
 
                     const cmd_copy = try self.allocator.dupeZ(u8, cmd);
                     try self.recordToHistory(&self.global_history, cmd_copy);
@@ -435,10 +441,10 @@ pub const HistoryManager = struct {
                     if (std.mem.indexOf(u8, line, ":")) |idx| {
                         const cmd = trimmed[1 .. idx];
                         const count_str = trimmed[idx + 1 ..];
-                        const count = std.fmt.parseInt(usize, count_str) catch continue;
+                        const count = std.fmt.parseInt(usize, count_str, 10) catch continue;
 
                         const cmd_copy = try self.allocator.dupeZ(u8, cmd);
-                        if (self.history_by_path.get(current_path.?)) |history| {
+                        if (self.history_by_path.getPtr(current_path.?)) |history| {
                             try self.recordToHistory(history, cmd_copy);
                             _ = try history.commands.put(cmd_copy, count);
                         }

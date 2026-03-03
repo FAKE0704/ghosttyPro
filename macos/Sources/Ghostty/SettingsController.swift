@@ -59,8 +59,10 @@ class SettingsController: NSWindowController {
 
     /// Reload the configuration from disk.
     private func reloadConfiguration() {
+        // Load latest config values into existing viewModel
+        // to preserve the @EnvironmentObject relationship
         let config = Ghostty.Config(at: nil, finalize: true)
-        viewModel = SettingsViewModel(config: config)
+        viewModel?.loadValuesFromConfig()
     }
 
     /// Save configuration changes.
@@ -120,8 +122,11 @@ extension SettingsController: NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
-        // Clean up when window closes
-        viewModel = nil
+        // Reload configuration to reset unsaved changes state
+        // Don't set viewModel to nil to keep the environment object intact
+        if let viewModel = viewModel {
+            viewModel.loadValuesFromConfig()
+        }
     }
 
     /// Show an alert with the given message.

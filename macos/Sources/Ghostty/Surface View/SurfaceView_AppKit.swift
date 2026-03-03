@@ -1730,15 +1730,15 @@ extension Ghostty {
         func acceptCompletion(_ completion: CompletionState) {
             guard let surface = self.surface else { return }
 
-            let fullCommand = completion.inputPrefix + completion.previewText
-            let action = "completion_submit:\(fullCommand)"
+            // Use previewText (the suffix part) to append to user's input
+            let completionText = completion.previewText
 
-            // Send the action to trigger command submission
-            _ = ghostty_surface_binding_action(
-                surface,
-                action,
-                UInt(action.lengthOfBytes(using: .utf8))
-            )
+            if !completionText.isEmpty {
+                // Send only the suffix part for completion
+                completionText.withCString { cString in
+                    ghostty_surface_text(surface, cString, UInt(completionText.utf8.count))
+                }
+            }
 
             // Clear completion state
             completionState = nil
