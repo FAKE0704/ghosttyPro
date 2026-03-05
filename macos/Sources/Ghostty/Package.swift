@@ -382,6 +382,10 @@ extension Notification.Name {
     static let ghosttyConfigDidChange = Notification.Name("com.mitchellh.ghostty.configDidChange")
     static let GhosttyConfigChangeKey = ghosttyConfigDidChange.rawValue
 
+    /// Preview configuration change for real-time settings preview without triggering error checks.
+    static let ghosttyConfigPreviewDidChange = Notification.Name("com.mitchellh.ghostty.configPreviewDidChange")
+    static let GhosttyConfigPreviewChangeKey = ghosttyConfigPreviewDidChange.rawValue
+
     /// Color change. Object is the surface changing.
     static let ghosttyColorDidChange = Notification.Name("com.mitchellh.ghostty.ghosttyColorDidChange")
     static let GhosttyColorChangeKey = ghosttyColorDidChange.rawValue

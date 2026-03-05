@@ -155,6 +155,11 @@ class BaseTerminalController: NSWindowController,
             object: nil)
         center.addObserver(
             self,
+            selector: #selector(ghosttyConfigPreviewDidChangeBase(_:)),
+            name: .ghosttyConfigPreviewDidChange,
+            object: nil)
+        center.addObserver(
+            self,
             selector: #selector(ghosttyCommandPaletteDidToggle(_:)),
             name: .ghosttyCommandPaletteDidToggle,
             object: nil)
@@ -559,6 +564,18 @@ class BaseTerminalController: NSWindowController,
         ] as? Ghostty.Config else { return }
 
         // Update our derived config
+        self.derivedConfig = DerivedConfig(config)
+    }
+
+    @objc private func ghosttyConfigPreviewDidChangeBase(_ notification: Notification) {
+        // Preview updates are always app-level (object is nil)
+
+        // Get the preview configuration object out
+        guard let config = notification.userInfo?[
+            Notification.Name.GhosttyConfigPreviewChangeKey
+        ] as? Ghostty.Config else { return }
+
+        // Update our derived config for real-time preview
         self.derivedConfig = DerivedConfig(config)
     }
 

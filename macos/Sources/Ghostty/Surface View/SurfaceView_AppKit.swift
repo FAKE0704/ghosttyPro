@@ -343,6 +343,11 @@ extension Ghostty {
                 object: self)
             center.addObserver(
                 self,
+                selector: #selector(ghosttyConfigPreviewDidChange(_:)),
+                name: .ghosttyConfigPreviewDidChange,
+                object: nil)
+            center.addObserver(
+                self,
                 selector: #selector(ghosttyColorDidChange(_:)),
                 name: .ghosttyColorDidChange,
                 object: self)
@@ -717,6 +722,25 @@ extension Ghostty {
             // Update our derived config
             DispatchQueue.main.async { [weak self] in
                 self?.derivedConfig = DerivedConfig(config)
+            }
+        }
+
+        @objc private func ghosttyConfigPreviewDidChange(_ notification: SwiftUI.Notification) {
+            // Get the preview configuration object out
+            guard let config = notification.userInfo?[
+                SwiftUI.Notification.Name.GhosttyConfigPreviewChangeKey
+            ] as? Ghostty.Config else { return }
+
+            // Update our derived config for preview without triggering full reload
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+
+                // Update the derived config
+                self.derivedConfig = DerivedConfig(config)
+
+                // Actually update the surface with the new config
+                guard let surface = self.surface else { return }
+                ghostty_surface_update_config(surface, config.config!)
             }
         }
 

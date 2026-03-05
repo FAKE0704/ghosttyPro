@@ -77,6 +77,11 @@ class QuickTerminalController: BaseTerminalController {
             object: nil)
         center.addObserver(
             self,
+            selector: #selector(ghosttyConfigPreviewDidChange(_:)),
+            name: .ghosttyConfigPreviewDidChange,
+            object: nil)
+        center.addObserver(
+            self,
             selector: #selector(closeWindow(_:)),
             name: .ghosttyCloseWindow,
             object: nil
@@ -704,6 +709,20 @@ class QuickTerminalController: BaseTerminalController {
         ] as? Ghostty.Config else { return }
 
         // Update our derived config
+        self.derivedConfig = DerivedConfig(config)
+
+        syncAppearance()
+    }
+
+    @objc private func ghosttyConfigPreviewDidChange(_ notification: Notification) {
+        // Preview updates are always app-level (object is nil)
+
+        // Get the preview configuration object out
+        guard let config = notification.userInfo?[
+            Notification.Name.GhosttyConfigPreviewChangeKey
+        ] as? Ghostty.Config else { return }
+
+        // Update our derived config for real-time preview
         self.derivedConfig = DerivedConfig(config)
 
         syncAppearance()

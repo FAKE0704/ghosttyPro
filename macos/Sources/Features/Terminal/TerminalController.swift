@@ -124,6 +124,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         )
         center.addObserver(
             self,
+            selector: #selector(ghosttyConfigPreviewDidChange(_:)),
+            name: .ghosttyConfigPreviewDidChange,
+            object: nil
+        )
+        center.addObserver(
+            self,
             selector: #selector(onFrameDidChange),
             name: NSView.frameDidChangeNotification,
             object: nil)
@@ -509,6 +515,22 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         /// Surface-level config will be updated in
         /// ``Ghostty/Ghostty/SurfaceView/derivedConfig`` then
         /// ``TerminalController/focusedSurfaceDidChange(to:)``
+    }
+
+    @objc private func ghosttyConfigPreviewDidChange(_ notification: Notification) {
+        // Get the preview configuration object out
+        guard let config = notification.userInfo?[
+            Notification.Name.GhosttyConfigPreviewChangeKey
+        ] as? Ghostty.Config else { return }
+
+        // Preview updates are always app-level (object is nil)
+        // Update our derived config for real-time preview
+        self.derivedConfig = DerivedConfig(config)
+
+        // If we have no surfaces in our window, update window appearance
+        if surfaceTree.isEmpty {
+            syncAppearance(.init(config))
+        }
     }
 
     /// Update the accessory view of each tab according to the keyboard

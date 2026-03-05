@@ -50,6 +50,12 @@ class TerminalViewContainer<ViewModel: TerminalViewModel>: NSView {
             name: .ghosttyConfigDidChange,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(ghosttyConfigPreviewDidChange(_:)),
+            name: .ghosttyConfigPreviewDidChange,
+            object: nil
+        )
     }
 
     override func viewDidMoveToWindow() {
@@ -66,6 +72,16 @@ class TerminalViewContainer<ViewModel: TerminalViewModel>: NSView {
     @objc private func ghosttyConfigDidChange(_ notification: Notification) {
         guard let config = notification.userInfo?[
             Notification.Name.GhosttyConfigChangeKey
+        ] as? Ghostty.Config else { return }
+        let newValue = DerivedConfig(config: config)
+        guard newValue != derivedConfig else { return }
+        derivedConfig = newValue
+        DispatchQueue.main.async(execute: updateGlassEffectIfNeeded)
+    }
+
+    @objc private func ghosttyConfigPreviewDidChange(_ notification: Notification) {
+        guard let config = notification.userInfo?[
+            Notification.Name.GhosttyConfigPreviewChangeKey
         ] as? Ghostty.Config else { return }
         let newValue = DerivedConfig(config: config)
         guard newValue != derivedConfig else { return }

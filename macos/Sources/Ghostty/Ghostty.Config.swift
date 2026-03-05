@@ -863,6 +863,14 @@ extension Ghostty.Config {
         value = Int(v)
     }
 
+    /// Get an integer configuration value (returns optional)
+    func getInt(_ key: String) -> Int? {
+        guard let cfg = self.config else { return nil }
+        var v: CUnsignedInt = 0
+        guard ghostty_config_get(cfg, &v, key, UInt(key.lengthOfBytes(using: .utf8))) else { return nil }
+        return Int(v)
+    }
+
     /// Get a string configuration value
     func getString(_ key: String) -> String? {
         guard let cfg = self.config else { return nil }
@@ -870,6 +878,25 @@ extension Ghostty.Config {
         guard ghostty_config_get(cfg, &v, key, UInt(key.lengthOfBytes(using: .utf8))) else { return nil }
         guard let ptr = v else { return nil }
         return String(cString: ptr)
+    }
+
+    /// Get a double configuration value
+    func getDouble(_ key: String) -> Double? {
+        guard let cfg = self.config else { return nil }
+        var v: Double = 0
+        guard ghostty_config_get(cfg, &v, key, UInt(key.lengthOfBytes(using: .utf8))) else { return nil }
+        return v
+    }
+
+    /// Set a double configuration value
+    func setDouble(_ key: String, _ value: Double) {
+        guard let cfg = self.config else { return }
+        let valueStr = String(value)
+        valueStr.withCString { ptr in
+            key.withCString { keyPtr in
+                ghostty_config_set(cfg, keyPtr, ptr)
+            }
+        }
     }
 
     /// Save configuration values to the default config file

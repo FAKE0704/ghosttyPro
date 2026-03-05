@@ -1,5 +1,8 @@
 import SwiftUI
+import AppKit
 import GhosttyKit
+import OSLog
+import Foundation
 
 /// ViewModel for managing Ghostty settings interface.
 /// Bridges SwiftUI views with the underlying Ghostty configuration system.
@@ -45,10 +48,6 @@ class SettingsViewModel: ObservableObject {
         didSet { markChanged() }
     }
 
-    /// Line spacing
-    @Published var lineSpacing: Double = 0 {
-        didSet { markChanged() }
-    }
 
     // MARK: - Color Settings
 
@@ -79,8 +78,8 @@ class SettingsViewModel: ObservableObject {
         didSet { markChanged() }
     }
 
-    /// Scrollback buffer size
-    @Published var scrollbackLines: Int = 10000 {
+    /// Scrollback buffer size (in approximate lines)
+    @Published var scrollbackLines: Int = 100000 {
         didSet { markChanged() }
     }
 
@@ -177,9 +176,36 @@ class SettingsViewModel: ObservableObject {
         windowOpacity = config.backgroundOpacity
         backgroundBlurEnabled = config.backgroundBlur.isEnabled
 
+        // Load theme
+        if let themeStr = config.getString("theme") {
+            if themeStr.contains("light") {
+                themeIndex = 1
+            } else if themeStr.contains("dark") {
+                themeIndex = 2
+            } else {
+                themeIndex = 0 // auto/system
+            }
+        }
+
         // Load font settings
-        // Note: These would need to be added to the Config class
-        // For now using defaults
+        if let fontSizeValue = config.getDouble("font-size") {
+            fontSize = max(8, min(72, fontSizeValue))
+        } else {
+            fontSize = 13
+        }
+
+        if let fontFamilyStr = config.getString("font-family") {
+            // Try to find the font family in our options
+            if let index = SettingsViewModel.fontFamilyOptions.firstIndex(where: { $0 == fontFamilyStr }) {
+                fontFamilyIndex = index
+            } else {
+                // Reset to default if font family not found in options
+                fontFamilyIndex = 0
+            }
+        } else {
+            // Use default (Menlo)
+            fontFamilyIndex = 0
+        }
 
         // Load color settings
         let fg = config.backgroundColor // Using background as fallback
@@ -187,11 +213,36 @@ class SettingsViewModel: ObservableObject {
         backgroundColor = config.backgroundColor
 
         // Load terminal settings
-        // Note: cursor-style would need to be added to Config class
+        if let cursorStyleStr = config.getString("cursor-style") {
+            switch cursorStyleStr {
+            case "underline":
+                cursorStyleIndex = 1
+            case "bar":
+                cursorStyleIndex = 2
+            default:
+                cursorStyleIndex = 0 // block
+            }
+        }
+
+        // scrollback-limit is in bytes, convert to approximate lines
+        // Default is 10000000 bytes, we'll map this differently
+        // For now use a simple approximation
+        if let scrollbackLimit = config.getInt("scrollback-limit"), scrollbackLimit > 0 {
+            // Convert bytes to approximate line count (assuming ~100 chars per line)
+            scrollbackLines = max(1000, min(100000, scrollbackLimit / 100))
+        } else {
+            // Default: 10000000 bytes = 100000 lines approximately
+            scrollbackLines = 100000
+        }
 
         // Load completion settings
-        config.getBool("completion-enabled", &completionEnabled)
-        config.getInt("completion-min-chars", &completionMinChars)
+        var completionEnabledValue = false
+        config.getBool("completion-enabled", &completionEnabledValue)
+        completionEnabled = completionEnabledValue
+
+        var completionMinCharsValue = 1
+        config.getInt("completion-min-chars", &completionMinCharsValue)
+        completionMinChars = max(1, min(10, completionMinCharsValue))
 
         let completionModeStr = config.getString("completion-mode")
         if completionModeStr == "inline" {
@@ -201,10 +252,40 @@ class SettingsViewModel: ObservableObject {
         }
 
         // Load window settings
+        var initialWindow = true
+        config.getBool("initial-window", &initialWindow)
+        initialWindowSizeIndex = initialWindow ? 0 : 1
+
+        // Map window-decoration to index
+        // Config returns a Bool for enabled, but we need the actual string value
+        if let decorationStr = config.getString("window-decoration") {
+            switch decorationStr {
+            case "none":
+                windowDecorationIndex = 0
+            case "client", "auto":
+                windowDecorationIndex = 1
+            case "server":
+                windowDecorationIndex = 2
+            default:
+                windowDecorationIndex = 1
+            }
+        }
+
         windowSaveStateEnabled = config.windowSaveState != "never"
 
         // Load advanced settings
-        // Note: These would need specific config keys
+        // Shell integration
+        if let shellIntegrationStr = config.getString("shell-integration") {
+            switch shellIntegrationStr {
+            case "none":
+                shellIntegrationIndex = 0
+            default:
+                shellIntegrationIndex = 1 // detect is default
+            }
+        }
+
+        // Note: quickTerminalEnabled and debugLoggingEnabled don't have direct config keys
+        // quick-terminal is controlled by quick-terminal-position etc.
     }
 
     // MARK: - Change Tracking
@@ -217,16 +298,96 @@ class SettingsViewModel: ObservableObject {
 
     /// Save all changes to the configuration file
     func save() -> Bool {
+        // Cancel any pending preview updates
+        cancelPendingPreview()
+
         // First update the in-memory config object
         updateConfigFromViewModel()
 
         // Build settings dictionary for file persistence
         var settings: [String: String] = [:]
+
+        // Appearance settings
+        settings["background-opacity"] = String(format: "%.2f", windowOpacity)
+        let backgroundBlurValue: String
+        switch backgroundBlurEnabled {
+        case true:
+            // Determine which blur mode to use based on macOS version
+            if #available(macOS 26.0, *) {
+                backgroundBlurValue = "-1" // macosGlassRegular
+            } else {
+                backgroundBlurValue = "20" // fallback radius
+            }
+        case false:
+            backgroundBlurValue = "0"
+        }
+        settings["background-blur"] = backgroundBlurValue
+
+        // Theme: only save if explicitly set to light or dark
+        // "auto" (index 0) means use system default, so don't set theme config
+        switch themeIndex {
+        case 1:
+            settings["theme"] = "light"
+        case 2:
+            settings["theme"] = "dark"
+        default:
+            // case 0 (auto/system) - don't set theme, use default behavior
+            break
+        }
+
+        // Font settings
+        if fontFamilyIndex >= 0 && fontFamilyIndex < SettingsViewModel.fontFamilyOptions.count {
+            settings["font-family"] = SettingsViewModel.fontFamilyOptions[fontFamilyIndex]
+        }
+
+        // Ensure font size is valid before saving
+        let validFontSize = max(8, min(72, fontSize))
+        settings["font-size"] = String(format: "%.1f", validFontSize)
+
+        // Terminal settings
+        let cursorStyleValue: String
+        switch cursorStyleIndex {
+        case 1:
+            cursorStyleValue = "underline"
+        case 2:
+            cursorStyleValue = "bar"
+        default:
+            cursorStyleValue = "block"
+        }
+        settings["cursor-style"] = cursorStyleValue
+
+        // Convert lines back to bytes (approximately)
+        // Ensure scrollback lines is within valid range
+        let validScrollbackLines = max(1000, min(100000, scrollbackLines))
+        settings["scrollback-limit"] = String(validScrollbackLines * 100)
+
+        // Completion settings
         settings["completion-enabled"] = completionEnabled ? "true" : "false"
-        settings["completion-min-chars"] = String(completionMinChars)
+
+        // Ensure completion min chars is within valid range
+        let validMinChars = max(1, min(10, completionMinChars))
+        settings["completion-min-chars"] = String(validMinChars)
         settings["completion-mode"] = completionModeIndex == 0 ? "inline" : "menu"
 
-        // Add shell-integration setting
+        // Window settings
+        settings["initial-window"] = initialWindowSizeIndex == 0 ? "true" : "false"
+
+        let windowDecorationValue: String
+        switch windowDecorationIndex {
+        case 0:
+            windowDecorationValue = "none"
+        case 1:
+            windowDecorationValue = "auto"
+        case 2:
+            windowDecorationValue = "server"
+        default:
+            windowDecorationValue = "auto"
+        }
+        settings["window-decoration"] = windowDecorationValue
+
+        settings["window-save-state"] = windowSaveStateEnabled ? "default" : "never"
+
+        // Advanced settings
         let shellIntegrationValue: String
         switch shellIntegrationIndex {
         case 0:
@@ -247,6 +408,38 @@ class SettingsViewModel: ObservableObject {
 
         errorMessage = nil
         hasUnsavedChanges = false
+
+        // Reload the config to get the new values
+        let newConfig = Ghostty.Config(at: nil, finalize: true)
+        self.config = newConfig
+
+        // Get the app instance to update config at the底层 level
+        guard let appDelegate = NSApplication.shared.delegate as? AppDelegate,
+              let app = appDelegate.ghostty.app else {
+            // Fallback: just post notification
+            NotificationCenter.default.post(
+                name: .ghosttyConfigDidChange,
+                object: nil,
+                userInfo: [
+                    Notification.Name.GhosttyConfigChangeKey: newConfig,
+                ]
+            )
+            return true
+        }
+
+        // Update the app-level config directly using the C API
+        // This will propagate to all surfaces
+        ghostty_app_update_config(app, newConfig.config!)
+
+        // Post notification to update UI elements
+        NotificationCenter.default.post(
+            name: .ghosttyConfigDidChange,
+            object: nil,
+            userInfo: [
+                Notification.Name.GhosttyConfigChangeKey: newConfig,
+            ]
+        )
+
         return true
     }
 
@@ -259,29 +452,198 @@ class SettingsViewModel: ObservableObject {
 
     /// Apply ViewModel changes back to the config
     private func updateConfigFromViewModel() {
+        // Update appearance settings
+        config.setDouble("background-opacity", windowOpacity)
+
+        let backgroundBlurValue: Int32
+        switch backgroundBlurEnabled {
+        case true:
+            // Determine which blur mode to use based on macOS version
+            if #available(macOS 26.0, *) {
+                backgroundBlurValue = -1 // macosGlassRegular
+            } else {
+                backgroundBlurValue = 20 // fallback radius
+            }
+        case false:
+            backgroundBlurValue = 0
+        }
+        config.setInt("background-blur", backgroundBlurValue)
+
+        // Theme: only set if explicitly choosing light or dark
+        // "auto" (index 0) means use system default, so don't set theme
+        switch themeIndex {
+        case 1:
+            config.setString("theme", "light")
+        case 2:
+            config.setString("theme", "dark")
+        default:
+            // case 0 (auto/system) - don't set theme, let it use default
+            break
+        }
+
+        // Update font settings
+        if fontFamilyIndex >= 0 && fontFamilyIndex < SettingsViewModel.fontFamilyOptions.count {
+            config.setString("font-family", SettingsViewModel.fontFamilyOptions[fontFamilyIndex])
+        }
+
+        // Ensure font size is valid before setting
+        let validFontSize = max(8, min(72, fontSize))
+        config.setDouble("font-size", validFontSize)
+
+        // Update terminal settings
+        let cursorStyleValue: String
+        switch cursorStyleIndex {
+        case 1:
+            cursorStyleValue = "underline"
+        case 2:
+            cursorStyleValue = "bar"
+        default:
+            cursorStyleValue = "block"
+        }
+        config.setString("cursor-style", cursorStyleValue)
+
+        // Ensure scrollback lines is within valid range
+        let validScrollbackLines = max(1000, min(100000, scrollbackLines))
+        config.setInt("scrollback-limit", Int32(validScrollbackLines * 100))
+
         // Update completion settings
         config.setBool("completion-enabled", completionEnabled)
-        config.setInt("completion-min-chars", Int32(completionMinChars))
+
+        // Ensure completion min chars is within valid range
+        let validMinChars = max(1, min(10, completionMinChars))
+        config.setInt("completion-min-chars", Int32(validMinChars))
 
         let completionModeValue = completionModeIndex == 0 ? "inline" : "menu"
         config.setString("completion-mode", completionModeValue)
 
-        // Update shell-integration setting
+        // Update window settings
+        config.setBool("initial-window", initialWindowSizeIndex == 0)
+
+        let windowDecorationValue: String
+        switch windowDecorationIndex {
+        case 0:
+            windowDecorationValue = "none"
+        case 1:
+            windowDecorationValue = "auto"
+        case 2:
+            windowDecorationValue = "server"
+        default:
+            windowDecorationValue = "auto"
+        }
+        config.setString("window-decoration", windowDecorationValue)
+
+        config.setString("window-save-state", windowSaveStateEnabled ? "default" : "never")
+
+        // Update advanced settings
         let shellIntegrationValue = shellIntegrationIndex == 0 ? "none" : "detect"
         config.setString("shell-integration", shellIntegrationValue)
-
-        // Update other settings
-        // This would use ghostty_config_set for each key
-        // For now this is a placeholder for the pattern
     }
 
     // MARK: - Preview Support
+
+    /// Timer for debouncing font size preview
+    private var previewDebounceTimer: DispatchWorkItem?
+
+    /// Preview font size change in real-time with debouncing
+    func previewFontSizeChange(_ newSize: Double) {
+        // Cancel any pending preview
+        previewDebounceTimer?.cancel()
+
+        // Create a new debounced task
+        let task = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.applyFontSizePreview(newSize)
+        }
+
+        previewDebounceTimer = task
+
+        // Execute after a short delay (150ms)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: task)
+    }
+
+    /// Apply the font size preview to all terminals
+    private func applyFontSizePreview(_ newSize: Double) {
+        // Preview is now handled in the settings UI with example text
+        // No need to update terminal surfaces during preview
+    }
+
+    /// Cancel any pending preview updates
+    func cancelPendingPreview() {
+        previewDebounceTimer?.cancel()
+        previewDebounceTimer = nil
+    }
 
     /// Create a preview configuration without saving
     func createPreviewConfig() -> Ghostty.Config? {
         // Clone the current config and apply pending changes
         // This would be used for live preview
         return nil
+    }
+
+    /// Reset all settings to their default values
+    func resetToDefaults() {
+        // Reset appearance settings
+        windowOpacity = 1.0
+        themeIndex = 0  // auto
+        backgroundBlurEnabled = false
+
+        // Reset font settings
+        fontFamilyIndex = 0  // Menlo
+        fontSize = 13  // default on macOS
+
+        // Reset terminal settings
+        cursorStyleIndex = 0  // block
+        scrollbackLines = 100000  // 10MB / 100 chars per line
+        completionEnabled = false
+        completionModeIndex = 1  // menu
+        completionMinChars = 1
+
+        // Reset window settings
+        initialWindowSizeIndex = 0  // auto
+        windowDecorationIndex = 1  // auto
+        windowSaveStateEnabled = true
+
+        // Reset advanced settings
+        shellIntegrationIndex = 1  // detect
+
+        hasUnsavedChanges = true
+    }
+
+    /// Delete user configuration file and reset to defaults
+    func deleteUserConfig() -> Bool {
+        let logger = Logger(subsystem: "com.mitchellh.ghostty", category: "Config")
+
+        // Get the config file path
+        let path = ghostty_config_open_path()
+        defer {
+            ghostty_string_free(path)
+        }
+        guard let pathPtr = path.ptr else { return false }
+        let configPath = String(cString: pathPtr)
+
+        // Check if file exists
+        guard FileManager.default.fileExists(atPath: configPath) else {
+            // File doesn't exist, nothing to delete
+            return true
+        }
+
+        // Delete the file
+        do {
+            try FileManager.default.removeItem(atPath: configPath)
+            logger.info("Configuration file deleted: \(configPath)")
+
+            // Reload the config to get defaults
+            let defaultConfig = Ghostty.Config(at: nil, finalize: true)
+            self.config = defaultConfig
+            loadValuesFromConfig()
+
+            hasUnsavedChanges = false
+            return true
+        } catch {
+            logger.error("Failed to delete config: \(error)")
+            errorMessage = "删除配置文件失败：\(error.localizedDescription)"
+            return false
+        }
     }
 }
 

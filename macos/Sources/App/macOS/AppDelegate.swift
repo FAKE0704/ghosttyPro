@@ -167,6 +167,62 @@ class AppDelegate: NSObject,
 
     //MARK: - NSApplicationDelegate
 
+    /// Ensures a default configuration file exists. Creates one if it doesn't.
+    private func ensureDefaultConfigExists() {
+        // Get the config file path
+        let path = ghostty_config_open_path()
+        defer {
+            ghostty_string_free(path)
+        }
+        guard let pathPtr = path.ptr else { return }
+        let configPath = String(cString: pathPtr)
+
+        // Check if config file already exists
+        if FileManager.default.fileExists(atPath: configPath) {
+            return
+        }
+
+        // Create default config with common settings
+        let defaultConfig = """
+        # Ghostty Terminal Configuration
+        # This file was automatically created with default settings.
+
+        # Font settings
+        font-family = Menlo
+        font-size = 13
+
+        # Scrollback limit (10MB)
+        scrollback-limit = 10000000
+
+        # Window settings
+        window-decoration = auto
+        window-save-state = default
+
+        # Shell integration
+        shell-integration = detect
+
+        # macOS specific settings
+        macos-non-native-fullscreen = false
+
+        # Background opacity (slightly transparent)
+        background-opacity = 0.95
+        """
+
+        // Ensure directory exists
+        let dir = (configPath as NSString).deletingLastPathComponent
+        if !FileManager.default.fileExists(atPath: dir) {
+            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        }
+
+        // Write default config
+        do {
+            try defaultConfig.write(toFile: configPath, atomically: true, encoding: .utf8)
+            Self.logger.info("Created default configuration file at: \(configPath)")
+        } catch {
+            Self.logger.error("Failed to create default config: \(error)")
+        }
+    }
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: [
             // Disable the automatic full screen menu item because we handle
@@ -186,6 +242,9 @@ class AppDelegate: NSObject,
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Ensure default config file exists
+        ensureDefaultConfigExists()
+
         // System settings overrides
         UserDefaults.standard.register(defaults: [
             // Disable this so that repeated key events make it through to our terminal views.

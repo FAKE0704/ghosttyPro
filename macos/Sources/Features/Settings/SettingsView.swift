@@ -85,52 +85,87 @@ struct FontCategoryView: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        Form {
-            Section("字体系列") {
-                Picker("字体系列", selection: $viewModel.fontFamilyIndex) {
-                    ForEach(0..<SettingsViewModel.fontFamilyOptions.count, id: \.self) { index in
-                        Text(SettingsViewModel.fontFamilyOptions[index])
-                            .tag(index)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
+        VStack(spacing: 0) {
+            // Preview area at the top - shows all font settings
+            previewSection
 
-            Section("字体大小") {
-                VStack(alignment: .leading) {
-                    HStack {
-                        Text("字体大小")
-                        Spacer()
-                        Text("\(Int(viewModel.fontSize))pt")
-                            .foregroundColor(.secondary)
-                    }
+            Divider()
 
-                    Slider(
-                        value: $viewModel.fontSize,
-                        in: 8...72,
-                        step: 1
-                    )
-                }
-            }
-
-            Section("行间距") {
-                VStack(alignment: .leading) {
-                    HStack {
-                        Text("行间距")
-                        Spacer()
-                        Text("\(viewModel.lineSpacing, specifier: "%.1f")")
-                            .foregroundColor(.secondary)
-                    }
-
-                    Slider(
-                        value: $viewModel.lineSpacing,
-                        in: 0...10,
-                        step: 0.1
-                    )
-                }
-            }
+            // Configuration options below
+            configurationSection
         }
-        .formStyle(.grouped)
+    }
+
+    private var previewSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("字体预览")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            // Create a preview that reflects all current font settings
+            VStack(alignment: .leading, spacing: 4) {
+                // English preview
+                Text("The quick brown fox jumps over the lazy dog.")
+                    .font(.custom(
+                        SettingsViewModel.fontFamilyOptions[viewModel.fontFamilyIndex],
+                        size: viewModel.fontSize
+                    ))
+
+                // Chinese preview
+                Text("敏捷的棕色狐狸跳过了懒惰的狗。")
+                    .font(.custom(
+                        SettingsViewModel.fontFamilyOptions[viewModel.fontFamilyIndex],
+                        size: viewModel.fontSize
+                    ))
+
+                // Numbers and symbols preview
+                Text("0123456789 !@#$%^&*()")
+                    .font(.custom(
+                        SettingsViewModel.fontFamilyOptions[viewModel.fontFamilyIndex],
+                        size: viewModel.fontSize
+                    ))
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(NSColor.textBackgroundColor))
+            .cornerRadius(6)
+        }
+        .padding()
+        .background(Color(NSColor.controlBackgroundColor))
+    }
+
+    private var configurationSection: some View {
+        ScrollView {
+            Form {
+                Section("字体系列") {
+                    Picker("字体系列", selection: $viewModel.fontFamilyIndex) {
+                        ForEach(0..<SettingsViewModel.fontFamilyOptions.count, id: \.self) { index in
+                            Text(SettingsViewModel.fontFamilyOptions[index])
+                                .tag(index)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+
+                Section("字体大小") {
+                    VStack(alignment: .leading) {
+                        HStack {
+                            Text("字体大小")
+                            Spacer()
+                            Text("\(Int(viewModel.fontSize))pt")
+                                .foregroundColor(.secondary)
+                        }
+
+                        Slider(
+                            value: $viewModel.fontSize,
+                            in: 8...72,
+                            step: 1
+                        )
+                    }
+                }
+            }
+            .formStyle(.grouped)
+        }
     }
 }
 
@@ -323,6 +358,7 @@ struct SettingsView: View {
 
     @FocusState private var isSearchFocused: Bool
     @State private var searchText: String = ""
+    @State private var showingResetConfirmation = false
 
     init() {
         // Initialize the view model with a temporary config
@@ -381,6 +417,13 @@ struct SettingsView: View {
                         .keyboardShortcut(.escape, modifiers: [])
 
                         Button {
+                            showingResetConfirmation = true
+                        } label: {
+                            Text("还原默认")
+                                .foregroundColor(.red)
+                        }
+
+                        Button {
                             if viewModel.save() {
                                 // Close settings window after save
                                 NSApp.keyWindow?.close()
@@ -430,6 +473,17 @@ struct SettingsView: View {
         .onAppear {
             // Load current configuration values
             viewModel.loadValuesFromConfig()
+        }
+        .alert("还原默认配置", isPresented: $showingResetConfirmation) {
+            Button("取消", role: .cancel) { }
+            Button("确认还原", role: .destructive) {
+                if viewModel.deleteUserConfig() {
+                    // Show success message and close settings window
+                    NSApp.keyWindow?.close()
+                }
+            }
+        } message: {
+            Text("此操作将删除您的配置文件并将所有设置还原为默认值。此操作不可撤销。\n\n确定要继续吗？")
         }
     }
 }
